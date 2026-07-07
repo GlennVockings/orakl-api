@@ -1,0 +1,299 @@
+// ---------- Prisma config ----------
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Enums ----------
+enum GameStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum MemberRole {
+  HOST
+  ADMIN
+  PLAYER
+}
+
+enum MarketStatus {
+  OPEN
+  CLOSED
+  SETTLED
+}
+
+enum SelectionStatus {
+  ACTIVE
+  WINNER
+  LOSER
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+  PAYOUT
+  REFUND
+}
+
+model User {
+  id            String   @id @default(cuid())
+  displayName   String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Full version auth:
+  passwordHash String? // null allowed for prototype-only presets if you want
+
+  // Relationships
+  memberships          GameMember[]
+  gamesCreated         Game[]                @relation("GamesCreatedBy")
+  bets                 Bet[]
+  ledgerTxns           GameLedgerTxn[]
+  leaderboardSnapshots LeaderboardSnapshot[]
+
+  // Optional: tutorial state
+  // onboarding OnboardingState?
+  account Account[]
+  session Session[]
+
+  @@map("user")
+}
+
+model GameMember {
+  id       String     @id @default(cuid())
+  gameId   String
+  userId   String
+  role     MemberRole @default(PLAYER)
+  joinedAt DateTime   @default(now())
+
+  lastSeenAt DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+  @@index([userId])
+  @@index([gameId])
+}
+
+model Game {
+  id     String     @id @default(cuid())
+  name   String
+  status GameStatus @default(DRAFT)
+
+  joinCode      String @unique
+  startingChips Int    @default(1000)
+
+  createdById String
+  createdBy   User   @relation("GamesCreatedBy", fields: [createdById], references: [id])
+
+  // Helpful flags
+  isDemo     Boolean @default(false) // for public demo mode later (still join-code controlled if you want)
+  isTemplate Boolean @default(false) // if you ever want “copy this game setup”
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  closedAt       DateTime?
+  lastActivityAt DateTime  @default(now())
+
+  // Relationships
+  members              GameMember[]
+  teams                Team[]
+  markets              Market[]
+  bets                 Bet[]
+  ledgerTxns           GameLedgerTxn[]
+  leaderboardSnapshots LeaderboardSnapshot[]
+
+  @@index([createdById])
+}
+
+model Team {
+  id     String @id @default(cuid())
+  gameId String
+  name   String
+
+  selections Selection[]
+
+  // optional UI flair
+  emoji String?
+  color String?
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, name])
+  @@index([gameId])
+}
+
+model Market {
+  id                   String                @id @default(cuid())
+  gameId               String
+  name                 String
+  status               MarketStatus          @default(OPEN)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  ledgerTxns           GameLedgerTxn[]
+  leaderboardSnapshots LeaderboardSnapshot[]
+
+  game       Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  selections Selection[]
+
+  @@unique([gameId, name])
+  @@index([gameId])
+  @@index([gameId, status])
+}
+
+model Selection {
+  id          String          @id @default(cuid())
+  marketId    String
+  teamId      String?
+  team        Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  label       String?
+  decimalOdds Decimal         @db.Decimal(8, 3)
+  status      SelectionStatus @default(ACTIVE)
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  bets   Bet[]
+
+  @@index([marketId])
+  @@index([teamId])
+}
+
+model Bet {
+  id              String          @id @default(cuid())
+  gameId          String
+  userId          String
+  selectionId     String
+  stake           Decimal         @db.Decimal(12, 2)
+  oddsSnapshot    Decimal         @db.Decimal(8, 3)
+  potentialReturn Decimal         @db.Decimal(12, 2)
+  status          BetStatus       @default(PENDING)
+  placedAt        DateTime        @default(now())
+  settledAt       DateTime?
+  ledgerTxns      GameLedgerTxn[]
+
+  game      Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selection Selection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, userId, status])
+  @@index([selectionId])
+}
+
+model GameLedgerTxn {
+  id     String     @id @default(cuid())
+  gameId String
+  userId String
+  type   LedgerType
+  amount Decimal    @db.Decimal(12, 2)
+
+  betId String?
+  bet   Bet?    @relation(fields: [betId], references: [id], onDelete: SetNull)
+
+  marketId String?
+  market   Market? @relation(fields: [marketId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+  @@index([userId, gameId])
+  @@index([betId])
+  @@index([marketId])
+}
+
+// =======================
+// Better Auth Models
+// =======================
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Jwks {
+  id         String   @id
+  publicKey  String   @db.Text
+  privateKey String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("jwks")
+}
+
+model LeaderboardSnapshot {
+  id             String   @id @default(cuid())
+  gameId         String
+  marketId       String
+  userId         String
+  settledBalance Decimal  @db.Decimal(12, 2)
+  rank           Int
+  createdAt      DateTime @default(now())
+
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, createdAt])
+  @@index([gameId, userId, createdAt])
+  @@index([marketId])
+}
