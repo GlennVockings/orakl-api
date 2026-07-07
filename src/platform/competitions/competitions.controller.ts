@@ -11,16 +11,16 @@ import {
 } from '@nestjs/common';
 import { CompetitionsService } from './competitions.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
-import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard';
-import { getUserIdFromJwtPayload } from '../../../platform/auth/auth-user';
+import { BetterAuthJwtGuard } from '../auth/better-auth-jwt.guard';
+import { getUserIdFromJwtPayload } from '../auth/auth-user';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
-import { CompetitionAccessService } from './competitions-access.service';
+import { CompetitionAccessService } from './competition-access.service';
 
 @Controller('games')
 export class CompetitionsController {
   constructor(
-    private competitions: CompetitionsService,
-    private competitionAccess: CompetitionAccessService,
+    private readonly competitions: CompetitionsService,
+    private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)

@@ -2,14 +2,14 @@ import { Module } from '@nestjs/common';
 import { MarketsService } from './markets.service';
 import { MarketsController } from './markets.controller';
 import { PrismaService } from 'src/prisma.service';
-import { CompetitionsModule } from '../competitions/competitions.module';
+import { CompetitionsModule } from 'src/platform/competitions/competitions.module';
 import { WsModule } from '../realtime/ws.module';
-import { LeaderboardService } from 'src/platform/leaderboard/leaderboard.service';
+import { FauxStakesLeaderboardService } from 'src/games/faux-stakes/leaderboard/faux-stakes-leaderboard.service';
 
 @Module({
   imports: [CompetitionsModule, WsModule],
   controllers: [MarketsController],
-  providers: [MarketsService, PrismaService, LeaderboardService],
+  providers: [MarketsService, PrismaService, FauxStakesLeaderboardService],
   exports: [MarketsService],
 })
 export class MarketsModule {}

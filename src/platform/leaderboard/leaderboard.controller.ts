@@ -1,17 +1,17 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
-import { LeaderboardService } from './leaderboard.service';
-import { BetterAuthJwtGuard } from '../auth/better-auth-jwt.guard';
+import { Request } from 'express';
 import { getUserIdFromJwtPayload } from '../auth/auth-user';
+import { BetterAuthJwtGuard } from '../auth/better-auth-jwt.guard';
+import { LeaderboardService } from './leaderboard.service';
 
 @Controller('games')
+@UseGuards(BetterAuthJwtGuard)
 export class LeaderboardController {
-  constructor(private leaderboard: LeaderboardService) {}
+  constructor(private readonly leaderboardService: LeaderboardService) {}
 
-  @UseGuards(BetterAuthJwtGuard)
   @Get(':gameId/leaderboard')
-  async getLeaderboard(@Req() req: any, @Param('gameId') gameId: string) {
+  getLeaderboard(@Req() req: Request, @Param('gameId') gameId: string) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.leaderboard.getLeaderboard(userId, gameId);
+    return this.leaderboardService.getLeaderboard(userId, gameId);
   }
 }

@@ -18,9 +18,6 @@ export class CompetitionAccessService {
           userId,
         },
       },
-      include: {
-        game: true,
-      },
     });
 
     if (!membership) {
@@ -39,7 +36,9 @@ export class CompetitionAccessService {
       membership.role !== MemberRole.HOST &&
       membership.role !== MemberRole.ADMIN
     ) {
-      throw new ForbiddenException('User is not allowed to manage this game');
+      throw new ForbiddenException(
+        'User is not allowed to manage this competition',
+      );
     }
 
     return membership;

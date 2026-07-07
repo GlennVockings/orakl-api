@@ -31,13 +31,13 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`Socket disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('join_game_room')
-  handleJoinGameRoom(
+  @SubscribeMessage('join_competition_room')
+  handleJoinCompetitionRoom(
     @MessageBody() body: { gameId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(`game:${body.gameId}`);
-    console.log(`Socket ${client.id} joined room game:${body.gameId}`);
+    client.join(`competition:${body.gameId}`);
+    console.log(`Socket ${client.id} joined room competition:${body.gameId}`);
     return { ok: true };
   }
 
@@ -45,14 +45,14 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     gameId: string,
     payload: { userId: string; displayName: string },
   ) {
-    this.server.to(`game:${gameId}`).emit('game.member_joined', {
+    this.server.to(`competition:${gameId}`).emit('competition.member_joined', {
       gameId,
       ...payload,
     });
   }
 
   emitMarketCreated(gameId: string, payload: { name: string }) {
-    this.server.to(`game:${gameId}`).emit('game.market_created', {
+    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_created', {
       gameId,
       ...payload,
     });
@@ -62,14 +62,14 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     gameId: string,
     payload: { id: string; name: string; winningSelectionId: string },
   ) {
-    this.server.to(`game:${gameId}`).emit('game.market_settled', {
+    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_settled', {
       gameId,
       ...payload,
     });
   }
 
   emitMarketClosed(gameId: string, payload: { id: string; name: string }) {
-    this.server.to(`game:${gameId}`).emit('game.market_closed', {
+    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_closed', {
       gameId,
       ...payload,
     });
@@ -79,7 +79,7 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     gameId: string,
     payload: { createdCount: number; names: string[] },
   ) {
-    this.server.to(`game:${gameId}`).emit('game.team_created', {
+    this.server.to(`competition:${gameId}`).emit('faux-stakes.team_created', {
       ...payload,
     });
   }

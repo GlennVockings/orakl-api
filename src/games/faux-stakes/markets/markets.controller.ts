@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard';
 import { getUserIdFromJwtPayload } from '../../../platform/auth/auth-user';
-import { CompetitionAccessService } from '../competitions/competitions-access.service';
+import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { SettleMarketDto } from './dto/settle-market.dto';

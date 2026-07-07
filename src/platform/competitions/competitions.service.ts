@@ -9,7 +9,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { LedgerType, MemberRole, Prisma } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
-import { WsGateway } from '../realtime/ws.gateway';
+import { WsGateway } from 'src/games/faux-stakes/realtime/ws.gateway';
 
 function txnSign(type: LedgerType) {
   // CREDIT/PAYOUT/REFUND add, DEBIT subtract

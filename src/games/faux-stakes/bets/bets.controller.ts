@@ -11,13 +11,13 @@ import { BetsService } from './bets.service';
 import { BetterAuthJwtGuard } from 'src/platform/auth/better-auth-jwt.guard';
 import { getUserIdFromJwtPayload } from 'src/platform/auth/auth-user';
 import { CreateBetDto } from './dto/create-bet.dto';
-import { CompetitionAccessService } from '../competitions/competitions-access.service';
+import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 
 @Controller('/games/:gameId/bets')
 export class BetsController {
   constructor(
-    private bets: BetsService,
-    private competitionAccess: CompetitionAccessService,
+    private readonly betsService: BetsService,
+    private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
@@ -29,7 +29,7 @@ export class BetsController {
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(userId, gameId);
-    return this.bets.placeBet(userId, gameId, body);
+    return this.betsService.placeBet(userId, gameId, body);
   }
 
   @UseGuards(BetterAuthJwtGuard)
@@ -40,7 +40,7 @@ export class BetsController {
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(userId, gameId);
-    return this.bets.getUserBets(userId, gameId);
+    return this.betsService.getUserBets(userId, gameId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
@@ -52,6 +52,6 @@ export class BetsController {
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(userId, gameId);
-    return this.bets.undoBet(userId, gameId, betId);
+    return this.betsService.undoBet(userId, gameId, betId);
   }
 }

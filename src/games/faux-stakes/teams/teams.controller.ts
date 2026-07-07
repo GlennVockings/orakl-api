@@ -12,7 +12,7 @@ import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard
 import { TeamsService } from './teams.service';
 import { CreateTeamsDto } from './dto/create-team.dto';
 import { getUserIdFromJwtPayload } from 'src/platform/auth/auth-user';
-import { CompetitionAccessService } from '../competitions/competitions-access.service';
+import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { EditTeamsDto } from './dto/edit-team.dto';
 
 @Controller('games/:gameId/teams')

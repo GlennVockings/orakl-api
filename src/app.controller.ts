@@ -4,6 +4,6 @@ import { Controller, Get } from '@nestjs/common';
 export class AppController {
   @Get()
   health() {
-    return { ok: true, name: 'fake-betting-api' };
+    return { status: 'ok', name: 'orakl-api' };
   }
 }

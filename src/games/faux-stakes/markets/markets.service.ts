@@ -14,14 +14,14 @@ import {
 } from '@prisma/client';
 import { WsGateway } from '../realtime/ws.gateway';
 import { SettleMarketDto } from './dto/settle-market.dto';
-import { LeaderboardService } from 'src/platform/leaderboard/leaderboard.service';
+import { FauxStakesLeaderboardService } from 'src/games/faux-stakes/leaderboard/faux-stakes-leaderboard.service';
 
 @Injectable()
 export class MarketsService {
   constructor(
-    private prisma: PrismaService,
-    private leaderboardService: LeaderboardService,
-    private wsGateway: WsGateway,
+    private readonly prisma: PrismaService,
+    private readonly leaderboardService: FauxStakesLeaderboardService,
+    private readonly wsGateway: WsGateway,
   ) {}
 
   async createMarket(gameId: string, dto: CreateMarketDto) {
