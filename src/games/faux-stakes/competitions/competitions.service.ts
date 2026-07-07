@@ -6,9 +6,9 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { CreateGameDto } from './dto/create-competition.dto';
+import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { LedgerType, MemberRole, Prisma } from '@prisma/client';
-import { JoinGameDto } from './dto/join-competition.dto';
+import { JoinCompetitionDto } from './dto/join-competition.dto';
 import { WsGateway } from '../realtime/ws.gateway';
 
 function txnSign(type: LedgerType) {
@@ -25,7 +25,7 @@ function txnSign(type: LedgerType) {
 }
 
 @Injectable()
-export class GamesService {
+export class CompetitionsService {
   constructor(
     private prisma: PrismaService,
     private wsGateway: WsGateway,
@@ -58,7 +58,7 @@ export class GamesService {
     throw new Error('Failed to generate unique join code');
   }
 
-  async createGame(userId: string, dto: CreateGameDto) {
+  async createCompetition(userId: string, dto: CreateCompetitionDto) {
     for (let i = 0; i < 10; i++) {
       const joinCode = await this.generateUniqueJoinCode();
       const startingChips = dto.startingChips ?? 1000;
@@ -74,7 +74,7 @@ export class GamesService {
 
       try {
         const game = await this.prisma.$transaction(async (tx) => {
-          const createdGame = await tx.game.create({
+          const createdCompetition = await tx.game.create({
             data: {
               name: dto.name,
               joinCode,
@@ -105,14 +105,14 @@ export class GamesService {
 
           await tx.gameLedgerTxn.create({
             data: {
-              gameId: createdGame.id,
+              gameId: createdCompetition.id,
               userId,
               type: 'CREDIT',
               amount: startingChips,
             },
           });
 
-          return createdGame;
+          return createdCompetition;
         });
 
         return game;
@@ -155,23 +155,23 @@ export class GamesService {
       select: { gameId: true, userId: true, type: true, amount: true },
     });
 
-    const balanceByGameUser = new Map<string, Map<string, number>>();
+    const balanceByCompetitionUser = new Map<string, Map<string, number>>();
 
     for (const t of txns) {
       const sign = txnSign(t.type);
       const amt = Number(t.amount) * sign;
 
-      let byUser = balanceByGameUser.get(t.gameId);
+      let byUser = balanceByCompetitionUser.get(t.gameId);
       if (!byUser) {
         byUser = new Map<string, number>();
-        balanceByGameUser.set(t.gameId, byUser);
+        balanceByCompetitionUser.set(t.gameId, byUser);
       }
       byUser.set(t.userId, (byUser.get(t.userId) ?? 0) + amt);
     }
 
     return games.map((g) => {
       const myMembership = g.members.find((m) => m.userId === userId);
-      const byUser = balanceByGameUser.get(g.id) ?? new Map();
+      const byUser = balanceByCompetitionUser.get(g.id) ?? new Map();
 
       const myBalance = byUser.get(userId) ?? g.startingChips;
 
@@ -208,7 +208,7 @@ export class GamesService {
     });
   }
 
-  async joinGame(userId: string, dto: JoinGameDto) {
+  async joinCompetition(userId: string, dto: JoinCompetitionDto) {
     const joinCode = dto.joinCode.trim().toUpperCase();
 
     const game = await this.prisma.game.findFirst({
@@ -293,7 +293,7 @@ export class GamesService {
     return { ok: true };
   }
 
-  async getGame(userId: string, gameId: string) {
+  async getCompetition(userId: string, gameId: string) {
     const game = await this.prisma.game.findFirst({
       where: { id: gameId },
       select: {
@@ -312,7 +312,7 @@ export class GamesService {
     return game;
   }
 
-  async deleteGame(userId: string, gameId: string) {
+  async deleteCompetition(userId: string, gameId: string) {
     const membership = await this.prisma.gameMember.findUnique({
       where: {
         gameId_userId: {
@@ -332,7 +332,7 @@ export class GamesService {
 
     if (!membership) {
       throw new BadRequestException(
-        'Game does not exist or user is not a member',
+        'Competition does not exist or user is not a member',
       );
     }
 
@@ -349,8 +349,8 @@ export class GamesService {
 
     return {
       ok: true,
-      deletedGameId: gameId,
-      deletedGameName: membership.game.name,
+      deletedCompetitionId: gameId,
+      deletedCompetitionName: membership.game.name,
     };
   }
 
@@ -376,7 +376,7 @@ export class GamesService {
 
     if (!membership) {
       throw new BadRequestException(
-        'Game does not exist or user is not a member',
+        'Competition does not exist or user is not a member',
       );
     }
 

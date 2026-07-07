@@ -12,14 +12,14 @@ import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard
 import { TeamsService } from './teams.service';
 import { CreateTeamsDto } from './dto/create-team.dto';
 import { getUserIdFromJwtPayload } from 'src/platform/auth/auth-user';
-import { GameAccessService } from '../competitions/competitions-access.service';
+import { CompetitionAccessService } from '../competitions/competitions-access.service';
 import { EditTeamsDto } from './dto/edit-team.dto';
 
 @Controller('games/:gameId/teams')
 export class TeamsController {
   constructor(
     private teams: TeamsService,
-    private gameAccess: GameAccessService,
+    private competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
@@ -30,7 +30,7 @@ export class TeamsController {
     @Body() body: CreateTeamsDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
     return this.teams.createTeams(gameId, body);
   }
 
@@ -41,7 +41,7 @@ export class TeamsController {
     @Param('gameId') gameId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameMember(userId, gameId);
+    await this.competitionAccess.requireCompetitionMember(userId, gameId);
     return this.teams.getTeams(gameId);
   }
 
@@ -53,7 +53,7 @@ export class TeamsController {
     @Body() body: EditTeamsDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
     return this.teams.editTeam(gameId, body);
   }
 }

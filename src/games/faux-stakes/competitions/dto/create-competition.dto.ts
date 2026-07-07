@@ -10,7 +10,7 @@ import {
   Min,
 } from 'class-validator';
 
-export class CreateGameDto {
+export class CreateCompetitionDto {
   @IsString()
   name!: string;
 

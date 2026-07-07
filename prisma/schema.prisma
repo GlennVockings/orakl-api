@@ -9,6 +9,11 @@ generator client {
 }
 
 // ---------- Enums ----------
+enum GameType { 
+  FAUX_STAKES
+  PREDICTOR
+}
+
 enum GameStatus {
   DRAFT
   OPEN
@@ -101,6 +106,7 @@ model Game {
 
   createdById String
   createdBy   User   @relation("GamesCreatedBy", fields: [createdById], references: [id])
+  gameType GameType @default(FAUX_STAKES)
 
   // Helpful flags
   isDemo     Boolean @default(false) // for public demo mode later (still join-code controlled if you want)

@@ -9,46 +9,55 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { GamesService } from './competitions.service';
-import { CreateGameDto } from './dto/create-competition.dto';
+import { CompetitionsService } from './competitions.service';
+import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard';
 import { getUserIdFromJwtPayload } from '../../../platform/auth/auth-user';
-import { JoinGameDto } from './dto/join-competition.dto';
-import { GameAccessService } from './competitions-access.service';
+import { JoinCompetitionDto } from './dto/join-competition.dto';
+import { CompetitionAccessService } from './competitions-access.service';
 
 @Controller('games')
-export class GamesController {
+export class CompetitionsController {
   constructor(
-    private games: GamesService,
-    private gameAccess: GameAccessService,
+    private competitions: CompetitionsService,
+    private competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
   @Post('/create')
-  async create(@Req() req: { user: string }, @Body() body: CreateGameDto) {
+  async create(
+    @Req() req: { user: string },
+    @Body() body: CreateCompetitionDto,
+  ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.createGame(userId, body);
+    return this.competitions.createCompetition(userId, body);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Get()
   async getAll(@Req() req: { user: string }) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.getAll(userId);
+    return this.competitions.getAll(userId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Post('/join')
-  async joinGame(@Req() req: { user: string }, @Body() body: JoinGameDto) {
+  async joinCompetition(
+    @Req() req: { user: string },
+    @Body() body: JoinCompetitionDto,
+  ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.joinGame(userId, body);
+    return this.competitions.joinCompetition(userId, body);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Get(':gameId')
-  async getGame(@Req() req: { user: string }, @Param('gameId') gameId: string) {
+  async getCompetition(
+    @Req() req: { user: string },
+    @Param('gameId') gameId: string,
+  ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.getGame(userId, gameId);
+    return this.competitions.getCompetition(userId, gameId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
@@ -58,24 +67,24 @@ export class GamesController {
     @Param('gameId') gameId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.markSeen(userId, gameId);
+    return this.competitions.markSeen(userId, gameId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Delete(':gameId')
-  async deleteGame(
+  async deleteCompetition(
     @Req() req: { user: string },
     @Param('gameId') gameId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
-    return this.games.deleteGame(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
+    return this.competitions.deleteCompetition(userId, gameId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Get(':gameId/me')
   async getMe(@Req() req: { user: string }, @Param('gameId') gameId: string) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.games.getMe(userId, gameId);
+    return this.competitions.getMe(userId, gameId);
   }
 }

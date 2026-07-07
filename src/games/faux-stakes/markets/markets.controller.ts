@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard';
 import { getUserIdFromJwtPayload } from '../../../platform/auth/auth-user';
-import { GameAccessService } from '../competitions/competitions-access.service';
+import { CompetitionAccessService } from '../competitions/competitions-access.service';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { SettleMarketDto } from './dto/settle-market.dto';
@@ -18,7 +18,7 @@ import { SettleMarketDto } from './dto/settle-market.dto';
 export class MarketsController {
   constructor(
     private markets: MarketsService,
-    private gameAccess: GameAccessService,
+    private competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
@@ -29,7 +29,7 @@ export class MarketsController {
     @Body() body: CreateMarketDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
     return this.markets.createMarket(gameId, body);
   }
 
@@ -40,7 +40,7 @@ export class MarketsController {
     @Param('gameId') gameId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameMember(userId, gameId);
+    await this.competitionAccess.requireCompetitionMember(userId, gameId);
     return this.markets.getMarkets(gameId);
   }
 
@@ -53,7 +53,7 @@ export class MarketsController {
     @Body() body: SettleMarketDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
     return this.markets.settleMarket(gameId, marketId, body);
   }
 
@@ -65,7 +65,7 @@ export class MarketsController {
     @Param('marketId') marketId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.gameAccess.requireGameAdmin(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
     return this.markets.closeMarket(gameId, marketId);
   }
 }

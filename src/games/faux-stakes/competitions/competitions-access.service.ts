@@ -7,10 +7,10 @@ import { MemberRole } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
-export class GameAccessService {
+export class CompetitionAccessService {
   constructor(private prisma: PrismaService) {}
 
-  async requireGameMember(userId: string, gameId: string) {
+  async requireCompetitionMember(userId: string, gameId: string) {
     const membership = await this.prisma.gameMember.findUnique({
       where: {
         gameId_userId: {
@@ -24,14 +24,16 @@ export class GameAccessService {
     });
 
     if (!membership) {
-      throw new NotFoundException('Game not found or user is not a member');
+      throw new NotFoundException(
+        'Competition not found or user is not a member',
+      );
     }
 
     return membership;
   }
 
-  async requireGameAdmin(userId: string, gameId: string) {
-    const membership = await this.requireGameMember(userId, gameId);
+  async requireCompetitionAdmin(userId: string, gameId: string) {
+    const membership = await this.requireCompetitionMember(userId, gameId);
 
     if (
       membership.role !== MemberRole.HOST &&
@@ -44,4 +46,4 @@ export class GameAccessService {
   }
 }
 
-export default GameAccessService;
+export default CompetitionAccessService;
