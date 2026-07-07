@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
 import { TeamsController } from './teams.controller';
 import { TeamsService } from './teams.service';
 import { CompetitionsModule } from 'src/platform/competitions/competitions.module';
 import { WsModule } from '../realtime/ws.module';
+import { DatabaseModule } from 'src/platform/database/database.module';
 
 @Module({
-  imports: [CompetitionsModule, WsModule],
+  imports: [CompetitionsModule, WsModule, DatabaseModule],
   controllers: [TeamsController],
-  providers: [TeamsService, PrismaService],
+  providers: [TeamsService],
   exports: [TeamsService],
 })
 export class TeamsModule {}

@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
 import { FauxStakesLeaderboardService } from './faux-stakes-leaderboard.service';
+import { DatabaseModule } from 'src/platform/database/database.module';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [],
-  providers: [FauxStakesLeaderboardService, PrismaService],
+  providers: [FauxStakesLeaderboardService],
   exports: [FauxStakesLeaderboardService],
 })
 export class FauxStakesLeaderboardModule {}
