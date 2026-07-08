@@ -33,54 +33,69 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join_competition_room')
   handleJoinCompetitionRoom(
-    @MessageBody() body: { gameId: string },
+    @MessageBody() body: { competitionId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(`competition:${body.gameId}`);
-    console.log(`Socket ${client.id} joined room competition:${body.gameId}`);
+    client.join(`competition:${body.competitionId}`);
+    console.log(
+      `Socket ${client.id} joined room competition:${body.competitionId}`,
+    );
     return { ok: true };
   }
 
   emitMemberJoined(
-    gameId: string,
+    competitionId: string,
     payload: { userId: string; displayName: string },
   ) {
-    this.server.to(`competition:${gameId}`).emit('competition.member_joined', {
-      gameId,
-      ...payload,
-    });
+    this.server
+      .to(`competition:${competitionId}`)
+      .emit('competition.member_joined', {
+        competitionId,
+        ...payload,
+      });
   }
 
-  emitMarketCreated(gameId: string, payload: { name: string }) {
-    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_created', {
-      gameId,
-      ...payload,
-    });
+  emitMarketCreated(competitionId: string, payload: { name: string }) {
+    this.server
+      .to(`competition:${competitionId}`)
+      .emit('faux-stakes.market_created', {
+        competitionId,
+        ...payload,
+      });
   }
 
   emitMarketSettled(
-    gameId: string,
+    competitionId: string,
     payload: { id: string; name: string; winningSelectionId: string },
   ) {
-    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_settled', {
-      gameId,
-      ...payload,
-    });
+    this.server
+      .to(`competition:${competitionId}`)
+      .emit('faux-stakes.market_settled', {
+        competitionId,
+        ...payload,
+      });
   }
 
-  emitMarketClosed(gameId: string, payload: { id: string; name: string }) {
-    this.server.to(`competition:${gameId}`).emit('faux-stakes.market_closed', {
-      gameId,
-      ...payload,
-    });
+  emitMarketClosed(
+    competitionId: string,
+    payload: { id: string; name: string },
+  ) {
+    this.server
+      .to(`competition:${competitionId}`)
+      .emit('faux-stakes.market_closed', {
+        competitionId,
+        ...payload,
+      });
   }
 
   emitTeamCreated(
-    gameId: string,
+    competitionId: string,
     payload: { createdCount: number; names: string[] },
   ) {
-    this.server.to(`competition:${gameId}`).emit('faux-stakes.team_created', {
-      ...payload,
-    });
+    this.server
+      .to(`competition:${competitionId}`)
+      .emit('faux-stakes.team_created', {
+        ...payload,
+      });
   }
 }

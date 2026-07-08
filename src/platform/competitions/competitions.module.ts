@@ -1,18 +1,13 @@
 import { Module } from '@nestjs/common';
 import { CompetitionsController } from './competitions.controller';
 import { CompetitionsService } from './competitions.service';
-import { PrismaService } from 'src/prisma.service';
 import { CompetitionAccessService } from './competition-access.service';
-import { WsGateway } from 'src/games/faux-stakes/realtime/ws.gateway';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [CompetitionsController],
-  providers: [
-    CompetitionsService,
-    PrismaService,
-    CompetitionAccessService,
-    WsGateway,
-  ],
-  exports: [CompetitionAccessService],
+  providers: [CompetitionsService, CompetitionAccessService],
+  exports: [CompetitionsService, CompetitionAccessService],
 })
 export class CompetitionsModule {}

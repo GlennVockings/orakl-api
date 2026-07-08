@@ -10,13 +10,27 @@ export interface LeaderboardRow {
   rankDelta?: number | null;
 }
 
+export interface CompetitionCreatedContext {
+  competitionId: string;
+  hostUserId: string;
+  config?: unknown;
+}
+
+export type GamePlayerState = Record<string, unknown>;
+
 export interface GameEngine {
   gameType: GameType;
 
   isEnabled(): boolean;
 
-  getLeaderboard(
+  getLeaderboard(competitionId: string): Promise<LeaderboardRow[]>;
+
+  getPlayerState?(
     userId: string,
     competitionId: string,
-  ): Promise<LeaderboardRow[]>;
+  ): Promise<GamePlayerState>;
+
+  onCompetitionCreated?(context: CompetitionCreatedContext): Promise<void>;
+
+  onUserJoined?(userId: string, competitionId: string): Promise<void>;
 }

@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
-import { LedgerType, MemberRole, Prisma } from '@prisma/client';
+import { LedgerType, MemberRole } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
-import { WsGateway } from 'src/games/faux-stakes/realtime/ws.gateway';
+import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
 
 function txnSign(type: LedgerType) {
   // CREDIT/PAYOUT/REFUND add, DEBIT subtract
@@ -28,7 +28,7 @@ function txnSign(type: LedgerType) {
 export class CompetitionsService {
   constructor(
     private prisma: PrismaService,
-    private wsGateway: WsGateway,
+    private gameEngineRegistry: GameEngineRegistryService,
   ) {}
 
   private generateJoinCode(length = 6): string {
@@ -64,14 +64,6 @@ export class CompetitionsService {
       const startingChips = dto.startingChips ?? 1000;
       const now = new Date();
 
-      const teamNames = (dto.teamNames ?? [])
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0);
-
-      const uniqueNames = Array.from(
-        new Map(teamNames.map((name) => [name.toLowerCase(), name])).values(),
-      );
-
       try {
         const game = await this.prisma.$transaction(async (tx) => {
           const createdCompetition = await tx.game.create({
@@ -89,30 +81,20 @@ export class CompetitionsService {
                   lastSeenAt: now,
                 },
               },
-              teams: uniqueNames.length
-                ? {
-                    create: uniqueNames.map((name) => ({
-                      name,
-                    })),
-                  }
-                : undefined,
             },
             include: {
               members: true,
-              teams: true,
             },
           });
-
-          await tx.gameLedgerTxn.create({
-            data: {
-              gameId: createdCompetition.id,
-              userId,
-              type: 'CREDIT',
-              amount: startingChips,
-            },
-          });
-
           return createdCompetition;
+        });
+
+        const engine = this.gameEngineRegistry.get(game.gameType);
+
+        await engine.onCompetitionCreated?.({
+          competitionId: game.id,
+          hostUserId: userId,
+          config: dto,
         });
 
         return game;
@@ -220,6 +202,7 @@ export class CompetitionsService {
         joinCode: true,
         startingChips: true,
         createdAt: true,
+        gameType: true,
       },
     });
 
@@ -245,41 +228,17 @@ export class CompetitionsService {
         },
       });
 
-      const hasAnyTxn = await tx.gameLedgerTxn.findFirst({
-        where: { gameId: game.id, userId },
-        select: { id: true },
-      });
-
-      if (!hasAnyTxn) {
-        await tx.gameLedgerTxn.create({
-          data: {
-            gameId: game.id,
-            userId,
-            type: 'CREDIT',
-            amount: new Prisma.Decimal(game.startingChips),
-          },
-        });
-      }
-
       await tx.game.update({
         where: { id: game.id },
         data: { lastActivityAt: now },
       });
 
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { id: true, displayName: true },
-      });
-
-      return { game, membership, user };
+      return { game, membership };
     });
 
-    if (result.user) {
-      this.wsGateway.emitMemberJoined(game.id, {
-        userId: result.user.id,
-        displayName: result.user.displayName,
-      });
-    }
+    const engine = this.gameEngineRegistry.get(game.gameType);
+
+    await engine.onUserJoined?.(userId, game.id);
 
     return result;
   }
@@ -368,7 +327,7 @@ export class CompetitionsService {
             id: true,
             createdAt: true,
             lastActivityAt: true,
-            startingChips: true,
+            gameType: true,
           },
         },
       },
@@ -380,51 +339,15 @@ export class CompetitionsService {
       );
     }
 
-    const txns = await this.prisma.gameLedgerTxn.findMany({
-      where: {
-        gameId,
-        userId,
-      },
-      select: {
-        type: true,
-        amount: true,
-        marketId: true,
-      },
-    });
-
-    const currentBalance = txns.reduce((sum, txn) => {
-      const sign = txn.type === 'DEBIT' ? -1 : 1;
-
-      return sum + Number(txn.amount) * sign;
-    }, 0);
-
-    const settledMarkets = await this.prisma.market.findMany({
-      where: {
-        gameId,
-        status: 'SETTLED',
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    const settledMarketIds = new Set(settledMarkets.map((m) => m.id));
-
-    const settledBalance = txns.reduce((sum, txn) => {
-      const shouldInclude = !txn.marketId || settledMarketIds.has(txn.marketId);
-      if (!shouldInclude) return sum;
-
-      const sign = txn.type === 'DEBIT' ? -1 : 1;
-
-      return sum + Number(txn.amount) * sign;
-    }, 0);
+    const engine = this.gameEngineRegistry.get(membership.game.gameType);
+    const playerState =
+      (await engine.getPlayerState?.(userId, membership.game.id)) ?? {};
 
     return {
       userId,
       role: membership.role,
       isAdmin: membership.role === 'ADMIN' || membership.role === 'HOST',
-      currentBalance,
-      settledBalance,
+      ...playerState,
       lastSeenAt: membership.lastSeenAt,
       hasUpdates: membership.game.lastActivityAt > membership.lastSeenAt,
     };
