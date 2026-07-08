@@ -18,6 +18,8 @@ export interface CompetitionCreatedContext {
 
 export type GamePlayerState = Record<string, unknown>;
 
+export type GameCompetitionSummary = Record<string, unknown>;
+
 export interface GameEngine {
   gameType: GameType;
 
@@ -29,6 +31,11 @@ export interface GameEngine {
     userId: string,
     competitionId: string,
   ): Promise<GamePlayerState>;
+
+  getCompetitionSummary?(
+    userId: string,
+    competitionId: string,
+  ): Promise<GameCompetitionSummary>;
 
   onCompetitionCreated?(context: CompetitionCreatedContext): Promise<void>;
 

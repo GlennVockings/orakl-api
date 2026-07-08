@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   CompetitionCreatedContext,
+  GameCompetitionSummary,
   GameEngine,
   GamePlayerState,
   GameType,
@@ -82,6 +83,70 @@ export class FauxStakesEngine implements GameEngine {
     return {
       currentBalance,
       settledBalance,
+    };
+  }
+
+  async getCompetitionSummary(
+    userId: string,
+    competitionId: string,
+  ): Promise<GameCompetitionSummary> {
+    const game = await this.prisma.game.findUnique({
+      where: { id: competitionId },
+      select: {
+        startingChips: true,
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!game) return {};
+
+    const txns = await this.prisma.gameLedgerTxn.findMany({
+      where: { gameId: competitionId },
+      select: {
+        userId: true,
+        type: true,
+        amount: true,
+      },
+    });
+
+    const balanceByUser = new Map<string, number>();
+
+    for (const member of game.members) {
+      balanceByUser.set(member.userId, game.startingChips);
+    }
+
+    for (const txn of txns) {
+      const sign = txn.type === 'DEBIT' ? -1 : 1;
+      balanceByUser.set(
+        txn.userId,
+        (balanceByUser.get(txn.userId) ?? game.startingChips) +
+          Number(txn.amount) * sign,
+      );
+    }
+
+    const leaderboard = game.members
+      .map((member) => ({
+        userId: member.userId,
+        displayName: member.user.displayName,
+        balance: balanceByUser.get(member.userId) ?? game.startingChips,
+      }))
+      .sort((a, b) => b.balance - a.balance);
+
+    return {
+      startingChips: game.startingChips,
+      myMembership: {
+        balance: balanceByUser.get(userId) ?? game.startingChips,
+      },
+      leaderboard,
     };
   }
 

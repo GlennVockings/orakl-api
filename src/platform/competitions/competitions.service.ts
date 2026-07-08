@@ -7,21 +7,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
-import { LedgerType, MemberRole } from '@prisma/client';
+import { MemberRole } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
 import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
 
-function txnSign(type: LedgerType) {
-  // CREDIT/PAYOUT/REFUND add, DEBIT subtract
-  switch (type) {
-    case 'DEBIT':
-      return -1;
-    case 'CREDIT':
-    case 'PAYOUT':
-    case 'REFUND':
-    default:
-      return 1;
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 @Injectable()
@@ -119,10 +110,19 @@ export class CompetitionsService {
         },
       },
       orderBy: { lastActivityAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        joinCode: true,
+        createdAt: true,
+        lastActivityAt: true,
+        gameType: true,
         members: {
-          include: {
-            user: { select: { id: true, displayName: true } },
+          where: { userId },
+          select: {
+            role: true,
+            lastSeenAt: true,
           },
         },
       },
@@ -130,64 +130,41 @@ export class CompetitionsService {
 
     if (games.length === 0) return [];
 
-    const gameIds = games.map((g) => g.id);
+    return Promise.all(
+      games.map(async (game) => {
+        const myMembership = game.members[0] ?? null;
+        const lastSeenAt = myMembership?.lastSeenAt ?? game.createdAt;
+        const hasUpdates = game.lastActivityAt > lastSeenAt;
 
-    const txns = await this.prisma.gameLedgerTxn.findMany({
-      where: { gameId: { in: gameIds } },
-      select: { gameId: true, userId: true, type: true, amount: true },
-    });
+        const engine = this.gameEngineRegistry.get(game.gameType);
+        const gameSummary =
+          (await engine.getCompetitionSummary?.(userId, game.id)) ?? {};
 
-    const balanceByCompetitionUser = new Map<string, Map<string, number>>();
+        const gameMembershipState = isRecord(gameSummary.myMembership)
+          ? gameSummary.myMembership
+          : {};
 
-    for (const t of txns) {
-      const sign = txnSign(t.type);
-      const amt = Number(t.amount) * sign;
+        const { myMembership: _engineMembership, ...summary } = gameSummary;
 
-      let byUser = balanceByCompetitionUser.get(t.gameId);
-      if (!byUser) {
-        byUser = new Map<string, number>();
-        balanceByCompetitionUser.set(t.gameId, byUser);
-      }
-      byUser.set(t.userId, (byUser.get(t.userId) ?? 0) + amt);
-    }
+        return {
+          id: game.id,
+          name: game.name,
+          status: game.status,
+          joinCode: game.joinCode,
+          lastActivityAt: game.lastActivityAt,
+          ...summary,
 
-    return games.map((g) => {
-      const myMembership = g.members.find((m) => m.userId === userId);
-      const byUser = balanceByCompetitionUser.get(g.id) ?? new Map();
-
-      const myBalance = byUser.get(userId) ?? g.startingChips;
-
-      const leaderboard = g.members
-        .map((m) => ({
-          userId: m.userId,
-          displayName: m.user.displayName,
-          balance: byUser.get(m.userId) ?? g.startingChips,
-        }))
-        .sort((a, b) => b.balance - a.balance);
-
-      const lastSeenAt = myMembership?.lastSeenAt ?? g.createdAt;
-      const hasUpdates = g.lastActivityAt > lastSeenAt;
-
-      return {
-        id: g.id,
-        name: g.name,
-        status: g.status,
-        joinCode: g.joinCode,
-        startingChips: g.startingChips,
-        lastActivityAt: g.lastActivityAt,
-
-        myMembership: myMembership
-          ? {
-              role: myMembership.role,
-              lastSeenAt: myMembership.lastSeenAt,
-              balance: myBalance,
-              hasUpdates,
-            }
-          : null,
-
-        leaderboard,
-      };
-    });
+          myMembership: myMembership
+            ? {
+                role: myMembership.role,
+                lastSeenAt: myMembership.lastSeenAt,
+                hasUpdates,
+                ...gameMembershipState,
+              }
+            : null,
+        };
+      }),
+    );
   }
 
   async joinCompetition(userId: string, dto: JoinCompetitionDto) {
