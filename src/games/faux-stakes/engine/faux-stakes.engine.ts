@@ -10,6 +10,7 @@ import {
 import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
 import { PrismaService } from '../../../prisma.service';
+import { FauxStakesConfigService } from '../config/faux-stakes-config.service';
 
 type FauxStakesCompetitionConfig = {
   startingChips?: number;
@@ -29,6 +30,7 @@ export class FauxStakesEngine implements GameEngine {
     private readonly leaderboardService: FauxStakesLeaderboardService,
     private readonly wsGateway: WsGateway,
     private readonly prisma: PrismaService,
+    private readonly configService: FauxStakesConfigService,
   ) {}
 
   isEnabled(): boolean {
@@ -90,6 +92,8 @@ export class FauxStakesEngine implements GameEngine {
     userId: string,
     competitionId: string,
   ): Promise<GameCompetitionSummary> {
+    const config = await this.configService.getCompetition(competitionId);
+
     const game = await this.prisma.game.findUnique({
       where: { id: competitionId },
       select: {
@@ -121,14 +125,14 @@ export class FauxStakesEngine implements GameEngine {
     const balanceByUser = new Map<string, number>();
 
     for (const member of game.members) {
-      balanceByUser.set(member.userId, game.startingChips);
+      balanceByUser.set(member.userId, config.startingChips);
     }
 
     for (const txn of txns) {
       const sign = txn.type === 'DEBIT' ? -1 : 1;
       balanceByUser.set(
         txn.userId,
-        (balanceByUser.get(txn.userId) ?? game.startingChips) +
+        (balanceByUser.get(txn.userId) ?? config.startingChips) +
           Number(txn.amount) * sign,
       );
     }
@@ -137,14 +141,14 @@ export class FauxStakesEngine implements GameEngine {
       .map((member) => ({
         userId: member.userId,
         displayName: member.user.displayName,
-        balance: balanceByUser.get(member.userId) ?? game.startingChips,
+        balance: balanceByUser.get(member.userId) ?? config.startingChips,
       }))
       .sort((a, b) => b.balance - a.balance);
 
     return {
-      startingChips: game.startingChips,
+      startingChips: config.startingChips,
       myMembership: {
-        balance: balanceByUser.get(userId) ?? game.startingChips,
+        balance: balanceByUser.get(userId) ?? config.startingChips,
       },
       leaderboard,
     };
@@ -212,12 +216,7 @@ export class FauxStakesEngine implements GameEngine {
   }
 
   async onUserJoined(userId: string, competitionId: string): Promise<void> {
-    const game = await this.prisma.game.findUnique({
-      where: { id: competitionId },
-      select: { startingChips: true },
-    });
-
-    if (!game) return;
+    const config = await this.configService.getCompetition(competitionId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -238,7 +237,7 @@ export class FauxStakesEngine implements GameEngine {
             gameId: competitionId,
             userId,
             type: 'CREDIT',
-            amount: game.startingChips,
+            amount: config.startingChips,
           },
         });
       }
