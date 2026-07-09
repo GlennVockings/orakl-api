@@ -97,7 +97,6 @@ export class FauxStakesEngine implements GameEngine {
     const game = await this.prisma.game.findUnique({
       where: { id: competitionId },
       select: {
-        startingChips: true,
         members: {
           include: {
             user: {

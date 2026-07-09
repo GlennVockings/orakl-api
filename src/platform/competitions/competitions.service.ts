@@ -52,7 +52,6 @@ export class CompetitionsService {
   async createCompetition(userId: string, dto: CreateCompetitionDto) {
     for (let i = 0; i < 10; i++) {
       const joinCode = await this.generateUniqueJoinCode();
-      const startingChips = dto.startingChips ?? 1000;
       const now = new Date();
 
       try {
@@ -61,7 +60,6 @@ export class CompetitionsService {
             data: {
               name: dto.name,
               joinCode,
-              startingChips,
               createdById: userId,
               status: 'DRAFT',
               lastActivityAt: now,
@@ -85,7 +83,7 @@ export class CompetitionsService {
         await engine.onCompetitionCreated?.({
           competitionId: game.id,
           hostUserId: userId,
-          config: dto,
+          config: dto.config,
         });
 
         return game;
@@ -178,7 +176,6 @@ export class CompetitionsService {
         name: true,
         status: true,
         joinCode: true,
-        startingChips: true,
         createdAt: true,
         gameType: true,
       },
@@ -238,7 +235,6 @@ export class CompetitionsService {
         name: true,
         status: true,
         joinCode: true,
-        startingChips: true,
         createdAt: true,
       },
     });
