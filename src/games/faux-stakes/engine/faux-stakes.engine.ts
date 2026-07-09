@@ -169,6 +169,17 @@ export class FauxStakesEngine implements GameEngine {
     );
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.fauxStakesCompetition.upsert({
+        where: { gameId: competitionId },
+        update: {
+          startingChips,
+        },
+        create: {
+          gameId: competitionId,
+          startingChips,
+        },
+      });
+
       if (uniqueTeamNames.length > 0) {
         await tx.team.createMany({
           data: uniqueTeamNames.map((name) => ({
