@@ -102,7 +102,6 @@ model Game {
   status GameStatus @default(DRAFT)
 
   joinCode      String @unique
-  startingChips Int    @default(1000)
 
   createdById String
   createdBy   User   @relation("GamesCreatedBy", fields: [createdById], references: [id])

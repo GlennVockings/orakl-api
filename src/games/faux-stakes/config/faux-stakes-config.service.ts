@@ -10,25 +10,12 @@ export class FauxStakesConfigService {
       where: { gameId },
     });
 
-    if (config) return config;
-
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
-      select: {
-        id: true,
-        startingChips: true,
-      },
-    });
-
-    if (!game) {
-      throw new BadRequestException('Faux Stakes competition does not exist');
+    if (!config) {
+      throw new BadRequestException(
+        'Faux Stakes competition config does not exist',
+      );
     }
 
-    return this.prisma.fauxStakesCompetition.create({
-      data: {
-        gameId: game.id,
-        startingChips: game.startingChips,
-      },
-    });
+    return config;
   }
 }
