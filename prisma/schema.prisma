@@ -118,14 +118,27 @@ model Game {
   lastActivityAt DateTime  @default(now())
 
   // Relationships
-  members              GameMember[]
-  teams                Team[]
-  markets              Market[]
-  bets                 Bet[]
-  ledgerTxns           GameLedgerTxn[]
-  leaderboardSnapshots LeaderboardSnapshot[]
+  members                GameMember[]
+  fauxStakesCompetition  FauxStakesCompetition?
+  teams                  Team[]
+  markets                Market[]
+  bets                   Bet[]
+  ledgerTxns             GameLedgerTxn[]
+  leaderboardSnapshots   LeaderboardSnapshot[]
 
   @@index([createdById])
+}
+
+model FauxStakesCompetition {
+  id            String   @id @default(cuid())
+  gameId        String   @unique
+  startingChips Int      @default(1000)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
 }
 
 model Team {

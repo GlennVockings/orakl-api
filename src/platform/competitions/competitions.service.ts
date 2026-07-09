@@ -145,6 +145,7 @@ export class CompetitionsService {
           : {};
 
         const { myMembership: _engineMembership, ...summary } = gameSummary;
+        void _engineMembership;
 
         return {
           id: game.id,
