@@ -6,9 +6,9 @@ import {
   GameCompetitionSummary,
   GameEngine,
   GamePlayerState,
-  GameType,
   LeaderboardRow,
 } from '../../../platform/game-registry/game-engine.interface';
+import { GameType } from '../../../platform/game-registry/game-type';
 import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
 import { PrismaService } from '../../../prisma.service';

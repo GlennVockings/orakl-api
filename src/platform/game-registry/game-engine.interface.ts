@@ -1,4 +1,4 @@
-export type GameType = 'FAUX_STAKES' | 'PREDICTOR';
+import { GameType } from './game-type';
 
 export interface LeaderboardRow {
   userId: string;
