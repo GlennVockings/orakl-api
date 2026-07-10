@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
@@ -10,10 +9,6 @@ import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { MemberRole } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
 import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 @Injectable()
 export class CompetitionsService {
@@ -135,15 +130,15 @@ export class CompetitionsService {
         const hasUpdates = game.lastActivityAt > lastSeenAt;
 
         const engine = this.gameEngineRegistry.get(game.gameType);
-        const gameSummary =
-          (await engine.getCompetitionSummary?.(userId, game.id)) ?? {};
+        const gameSummary = (await engine.getCompetitionSummary?.({
+          userId,
 
-        const gameMembershipState = isRecord(gameSummary.myMembership)
-          ? gameSummary.myMembership
-          : {};
+          competitionId: game.id,
+        })) ?? {
+          summary: {},
 
-        const { myMembership: _engineMembership, ...summary } = gameSummary;
-        void _engineMembership;
+          membership: {},
+        };
 
         return {
           id: game.id,
@@ -151,14 +146,14 @@ export class CompetitionsService {
           status: game.status,
           joinCode: game.joinCode,
           lastActivityAt: game.lastActivityAt,
-          ...summary,
+          ...gameSummary.summary,
 
           myMembership: myMembership
             ? {
                 role: myMembership.role,
                 lastSeenAt: myMembership.lastSeenAt,
                 hasUpdates,
-                ...gameMembershipState,
+                ...gameSummary.membership,
               }
             : null,
         };
@@ -213,7 +208,10 @@ export class CompetitionsService {
 
     const engine = this.gameEngineRegistry.get(game.gameType);
 
-    await engine.onUserJoined?.(userId, game.id);
+    await engine.onUserJoined?.({
+      competitionId: game.id,
+      userId,
+    });
 
     return result;
   }
@@ -315,7 +313,10 @@ export class CompetitionsService {
 
     const engine = this.gameEngineRegistry.get(membership.game.gameType);
     const playerState =
-      (await engine.getPlayerState?.(userId, membership.game.id)) ?? {};
+      (await engine.getPlayerState?.({
+        userId,
+        competitionId: membership.game.id,
+      })) ?? {};
 
     return {
       userId,

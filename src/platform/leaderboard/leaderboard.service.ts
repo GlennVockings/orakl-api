@@ -31,6 +31,8 @@ export class LeaderboardService {
 
     const engine = this.gameEngineRegistry.get(game.gameType);
 
-    return engine.getLeaderboard(game.id);
+    return engine.getLeaderboard({
+      competitionId: game.id,
+    });
   }
 }

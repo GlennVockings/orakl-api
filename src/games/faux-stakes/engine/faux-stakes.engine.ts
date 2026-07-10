@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import {
+  CompetitionContext,
   CompetitionCreatedContext,
+  CompetitionUserContext,
   GameCompetitionSummary,
   GameEngine,
   GamePlayerState,
@@ -37,14 +39,16 @@ export class FauxStakesEngine implements GameEngine {
     return true;
   }
 
-  getLeaderboard(competitionId: string): Promise<LeaderboardRow[]> {
+  getLeaderboard({
+    competitionId,
+  }: CompetitionContext): Promise<LeaderboardRow[]> {
     return this.leaderboardService.getLeaderboardForCompetition(competitionId);
   }
 
-  async getPlayerState(
-    userId: string,
-    competitionId: string,
-  ): Promise<GamePlayerState> {
+  async getPlayerState({
+    userId,
+    competitionId,
+  }: CompetitionUserContext): Promise<GamePlayerState> {
     const txns = await this.prisma.gameLedgerTxn.findMany({
       where: {
         gameId: competitionId,
@@ -88,10 +92,10 @@ export class FauxStakesEngine implements GameEngine {
     };
   }
 
-  async getCompetitionSummary(
-    userId: string,
-    competitionId: string,
-  ): Promise<GameCompetitionSummary> {
+  async getCompetitionSummary({
+    userId,
+    competitionId,
+  }: CompetitionUserContext): Promise<GameCompetitionSummary> {
     const config = await this.configService.getCompetition(competitionId);
 
     const game = await this.prisma.game.findUnique({
@@ -110,7 +114,12 @@ export class FauxStakesEngine implements GameEngine {
       },
     });
 
-    if (!game) return {};
+    if (!game) {
+      return {
+        summary: {},
+        membership: {},
+      };
+    }
 
     const txns = await this.prisma.gameLedgerTxn.findMany({
       where: { gameId: competitionId },
@@ -145,11 +154,13 @@ export class FauxStakesEngine implements GameEngine {
       .sort((a, b) => b.balance - a.balance);
 
     return {
-      startingChips: config.startingChips,
-      myMembership: {
+      summary: {
+        startingChips: config.startingChips,
+        leaderboard,
+      },
+      membership: {
         balance: balanceByUser.get(userId) ?? config.startingChips,
       },
-      leaderboard,
     };
   }
 
@@ -214,7 +225,10 @@ export class FauxStakesEngine implements GameEngine {
     });
   }
 
-  async onUserJoined(userId: string, competitionId: string): Promise<void> {
+  async onUserJoined({
+    userId,
+    competitionId,
+  }: CompetitionUserContext): Promise<void> {
     const config = await this.configService.getCompetition(competitionId);
 
     const user = await this.prisma.user.findUnique({

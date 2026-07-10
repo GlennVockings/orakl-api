@@ -10,34 +10,40 @@ export interface LeaderboardRow {
   rankDelta?: number | null;
 }
 
-export interface CompetitionCreatedContext {
+export interface CompetitionContext {
   competitionId: string;
+}
+
+export interface CompetitionUserContext extends CompetitionContext {
+  userId: string;
+}
+
+export interface CompetitionCreatedContext extends CompetitionContext {
   hostUserId: string;
   config?: unknown;
 }
 
 export type GamePlayerState = Record<string, unknown>;
 
-export type GameCompetitionSummary = Record<string, unknown>;
+export interface GameCompetitionSummary {
+  summary: Record<string, unknown>;
+  membership: Record<string, unknown>;
+}
 
 export interface GameEngine {
   gameType: GameType;
 
   isEnabled(): boolean;
 
-  getLeaderboard(competitionId: string): Promise<LeaderboardRow[]>;
+  getLeaderboard(context: CompetitionContext): Promise<LeaderboardRow[]>;
 
-  getPlayerState?(
-    userId: string,
-    competitionId: string,
-  ): Promise<GamePlayerState>;
+  getPlayerState?(context: CompetitionUserContext): Promise<GamePlayerState>;
 
   getCompetitionSummary?(
-    userId: string,
-    competitionId: string,
+    context: CompetitionUserContext,
   ): Promise<GameCompetitionSummary>;
 
   onCompetitionCreated?(context: CompetitionCreatedContext): Promise<void>;
 
-  onUserJoined?(userId: string, competitionId: string): Promise<void>;
+  onUserJoined?(context: CompetitionUserContext): Promise<void>;
 }
