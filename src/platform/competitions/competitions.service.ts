@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { MemberRole } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
-import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
+import { GameEngineRegistryService } from '../competition-registry/competition-engine-registry.service';
 
 @Injectable()
 export class CompetitionsService {

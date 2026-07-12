@@ -198,18 +198,25 @@ export class FauxStakesLeaderboardService {
       );
     }
 
-    return settledRows.map((row) => {
-      const previousRank = previousRanks.get(row.userId) ?? null;
+    return {
+      scoreLabel: 'Settled balance',
+      rows: settledRows.map((row) => {
+        const previousRank = previousRanks.get(row.userId) ?? null;
+        const currentBalance = currentBalanceByUser.get(row.userId) ?? 0;
 
-      return {
-        userId: row.userId,
-        displayName: row.displayName,
-        currentBalance: currentBalanceByUser.get(row.userId) ?? 0,
-        settledBalance: row.settledBalance,
-        rank: row.rank,
-        previousRank,
-        rankDelta: previousRank !== null ? previousRank - row.rank : null,
-      };
-    });
+        return {
+          userId: row.userId,
+          displayName: row.displayName,
+          score: row.settledBalance,
+          rank: row.rank,
+          previousRank,
+          rankDelta: previousRank !== null ? previousRank - row.rank : null,
+          details: {
+            currentBalance,
+            settledBalance: row.settledBalance,
+          },
+        };
+      }),
+    };
   }
 }

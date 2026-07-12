@@ -3,7 +3,7 @@ import { CompetitionsController } from './competitions.controller';
 import { CompetitionsService } from './competitions.service';
 import { CompetitionAccessService } from './competition-access.service';
 import { DatabaseModule } from '../database/database.module';
-import { GameRegistryModule } from '../game-registry/game-registry.module';
+import { GameRegistryModule } from '../competition-registry/competition-registry.module';
 
 @Module({
   imports: [DatabaseModule, GameRegistryModule],

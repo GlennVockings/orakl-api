@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
-import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
+import { GameEngineRegistryService } from '../competition-registry/competition-engine-registry.service';
 
 @Injectable()
 export class LeaderboardService {

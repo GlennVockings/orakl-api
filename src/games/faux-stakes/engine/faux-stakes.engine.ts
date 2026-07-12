@@ -6,9 +6,9 @@ import {
   GameCompetitionSummary,
   GameEngine,
   GamePlayerState,
-  LeaderboardRow,
-} from '../../../platform/game-registry/game-engine.interface';
-import { GameType } from '../../../platform/game-registry/game-type';
+  LeaderboardResult,
+} from '../../../platform/competition-registry/competition-engine.interface';
+import { GameType } from '../../../platform/competition-registry/competition-type';
 import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
 import { PrismaService } from '../../../prisma.service';
@@ -41,7 +41,7 @@ export class FauxStakesEngine implements GameEngine {
 
   getLeaderboard({
     competitionId,
-  }: CompetitionContext): Promise<LeaderboardRow[]> {
+  }: CompetitionContext): Promise<LeaderboardResult> {
     return this.leaderboardService.getLeaderboardForCompetition(competitionId);
   }
 

@@ -32,11 +32,11 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join_competition_room')
-  handleJoinCompetitionRoom(
+  async handleJoinCompetitionRoom(
     @MessageBody() body: { competitionId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(`competition:${body.competitionId}`);
+    await client.join(`competition:${body.competitionId}`);
     console.log(
       `Socket ${client.id} joined room competition:${body.competitionId}`,
     );

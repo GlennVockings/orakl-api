@@ -1,13 +1,18 @@
-import { GameType } from './game-type';
+import { GameType } from './competition-type';
 
 export interface LeaderboardRow {
   userId: string;
   displayName: string | null;
-  currentBalance?: number;
-  settledBalance?: number;
+  score: number;
   rank: number;
   previousRank?: number | null;
   rankDelta?: number | null;
+  details?: Record<string, unknown>;
+}
+
+export interface LeaderboardResult {
+  scoreLabel: string;
+  rows: LeaderboardRow[];
 }
 
 export interface CompetitionContext {
@@ -35,7 +40,7 @@ export interface GameEngine {
 
   isEnabled(): boolean;
 
-  getLeaderboard(context: CompetitionContext): Promise<LeaderboardRow[]>;
+  getLeaderboard(context: CompetitionContext): Promise<LeaderboardResult>;
 
   getPlayerState?(context: CompetitionUserContext): Promise<GamePlayerState>;
 
