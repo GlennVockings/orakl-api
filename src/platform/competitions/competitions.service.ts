@@ -274,7 +274,9 @@ export class CompetitionsService {
       membership.role !== MemberRole.HOST &&
       membership.role !== MemberRole.ADMIN
     ) {
-      throw new ForbiddenException('User is not allowed to delete this game');
+      throw new ForbiddenException(
+        'User is not allowed to delete this competition',
+      );
     }
 
     await this.prisma.competition.delete({
