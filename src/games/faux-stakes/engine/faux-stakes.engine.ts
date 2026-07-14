@@ -98,7 +98,7 @@ export class FauxStakesEngine implements GameEngine {
   }: CompetitionUserContext): Promise<GameCompetitionSummary> {
     const config = await this.configService.getCompetition(competitionId);
 
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: {
         members: {
@@ -114,7 +114,7 @@ export class FauxStakesEngine implements GameEngine {
       },
     });
 
-    if (!game) {
+    if (!competition) {
       return {
         summary: {},
         membership: {},
@@ -132,7 +132,7 @@ export class FauxStakesEngine implements GameEngine {
 
     const balanceByUser = new Map<string, number>();
 
-    for (const member of game.members) {
+    for (const member of competition.members) {
       balanceByUser.set(member.userId, config.startingChips);
     }
 
@@ -145,7 +145,7 @@ export class FauxStakesEngine implements GameEngine {
       );
     }
 
-    const leaderboard = game.members
+    const leaderboard = competition.members
       .map((member) => ({
         userId: member.userId,
         displayName: member.user.displayName,

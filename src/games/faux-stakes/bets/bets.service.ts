@@ -65,7 +65,9 @@ export class BetsService {
     });
 
     if (!market) {
-      throw new BadRequestException('Market does not exist for this game');
+      throw new BadRequestException(
+        'Market does not exist for this competition',
+      );
     }
 
     if (market.status !== 'OPEN') {
@@ -89,7 +91,11 @@ export class BetsService {
     );
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const currentBalance = await this.getCurrentBalance(tx, competitionId, userId);
+      const currentBalance = await this.getCurrentBalance(
+        tx,
+        competitionId,
+        userId,
+      );
 
       if (currentBalance < dto.stake) {
         throw new ForbiddenException('Insufficient balance');
@@ -124,7 +130,11 @@ export class BetsService {
         data: { lastActivityAt: now },
       });
 
-      const updatedBalance = await this.getCurrentBalance(tx, competitionId, userId);
+      const updatedBalance = await this.getCurrentBalance(
+        tx,
+        competitionId,
+        userId,
+      );
 
       return {
         bet,

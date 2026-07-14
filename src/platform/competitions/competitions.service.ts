@@ -95,7 +95,7 @@ export class CompetitionsService {
   }
 
   async getAll(userId: string) {
-    const games = await this.prisma.competition.findMany({
+    const competitions = await this.prisma.competition.findMany({
       where: {
         members: {
           some: {
@@ -122,19 +122,19 @@ export class CompetitionsService {
       },
     });
 
-    if (games.length === 0) return [];
+    if (competitions.length === 0) return [];
 
     return Promise.all(
-      games.map(async (game) => {
-        const myMembership = game.members[0] ?? null;
-        const lastSeenAt = myMembership?.lastSeenAt ?? game.createdAt;
-        const hasUpdates = game.lastActivityAt > lastSeenAt;
+      competitions.map(async (competition) => {
+        const myMembership = competition.members[0] ?? null;
+        const lastSeenAt = myMembership?.lastSeenAt ?? competition.createdAt;
+        const hasUpdates = competition.lastActivityAt > lastSeenAt;
 
-        const engine = this.gameEngineRegistry.get(game.gameType);
+        const engine = this.gameEngineRegistry.get(competition.gameType);
         const gameSummary = (await engine.getCompetitionSummary?.({
           userId,
 
-          competitionId: game.id,
+          competitionId: competition.id,
         })) ?? {
           summary: {},
 
@@ -142,11 +142,11 @@ export class CompetitionsService {
         };
 
         return {
-          id: game.id,
-          name: game.name,
-          status: game.status,
-          joinCode: game.joinCode,
-          lastActivityAt: game.lastActivityAt,
+          id: competition.id,
+          name: competition.name,
+          status: competition.status,
+          joinCode: competition.joinCode,
+          lastActivityAt: competition.lastActivityAt,
           ...gameSummary.summary,
 
           myMembership: myMembership
@@ -165,7 +165,7 @@ export class CompetitionsService {
   async joinCompetition(userId: string, dto: JoinCompetitionDto) {
     const joinCode = dto.joinCode.trim().toUpperCase();
 
-    const game = await this.prisma.competition.findFirst({
+    const competition = await this.prisma.competition.findFirst({
       where: { joinCode },
       select: {
         id: true,
@@ -177,22 +177,24 @@ export class CompetitionsService {
       },
     });
 
-    if (!game)
+    if (!competition)
       throw new BadRequestException('Join code is incorrect or does not exist');
 
-    if (game.status === 'CLOSED')
-      throw new ForbiddenException('This game is closed');
+    if (competition.status === 'CLOSED')
+      throw new ForbiddenException('This competition is closed');
 
     const now = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
       const membership = await tx.competitionMember.upsert({
-        where: { competitionId_userId: { competitionId: game.id, userId } },
+        where: {
+          competitionId_userId: { competitionId: competition.id, userId },
+        },
         update: {
           lastSeenAt: now,
         },
         create: {
-          competitionId: game.id,
+          competitionId: competition.id,
           userId,
           role: 'PLAYER',
           lastSeenAt: now,
@@ -200,17 +202,17 @@ export class CompetitionsService {
       });
 
       await tx.competition.update({
-        where: { id: game.id },
+        where: { id: competition.id },
         data: { lastActivityAt: now },
       });
 
-      return { game, membership };
+      return { competition, membership };
     });
 
-    const engine = this.gameEngineRegistry.get(game.gameType);
+    const engine = this.gameEngineRegistry.get(competition.gameType);
 
     await engine.onUserJoined?.({
-      competitionId: game.id,
+      competitionId: competition.id,
       userId,
     });
 
@@ -227,7 +229,7 @@ export class CompetitionsService {
   }
 
   async getCompetition(userId: string, competitionId: string) {
-    const game = await this.prisma.competition.findFirst({
+    const competition = await this.prisma.competition.findFirst({
       where: { id: competitionId },
       select: {
         id: true,
@@ -238,10 +240,10 @@ export class CompetitionsService {
       },
     });
 
-    if (!game)
+    if (!competition)
       throw new BadRequestException('id is incorrect or does not exist');
 
-    return game;
+    return competition;
   }
 
   async deleteCompetition(userId: string, competitionId: string) {

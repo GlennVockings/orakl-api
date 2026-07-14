@@ -25,13 +25,13 @@ export class MarketsService {
   ) {}
 
   async createMarket(competitionId: string, dto: CreateMarketDto) {
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: { id: true },
     });
 
-    if (!game) {
-      throw new BadRequestException('Game does not exist');
+    if (!competition) {
+      throw new BadRequestException('Competition does not exist');
     }
 
     const hasTeamSelections =
@@ -135,13 +135,13 @@ export class MarketsService {
   }
 
   async getMarkets(competitionId: string) {
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: { id: true },
     });
 
-    if (!game) {
-      throw new BadRequestException('Game does not exist');
+    if (!competition) {
+      throw new BadRequestException('Competition does not exist');
     }
 
     return this.prisma.market.findMany({
@@ -173,7 +173,9 @@ export class MarketsService {
     });
 
     if (!market) {
-      throw new BadRequestException('Market does not exist for this game');
+      throw new BadRequestException(
+        'Market does not exist for this competition',
+      );
     }
 
     if (market.status === 'SETTLED') {
@@ -208,7 +210,11 @@ export class MarketsService {
     };
   }
 
-  async settleMarket(competitionId: string, marketId: string, dto: SettleMarketDto) {
+  async settleMarket(
+    competitionId: string,
+    marketId: string,
+    dto: SettleMarketDto,
+  ) {
     const now = new Date();
 
     const market = await this.prisma.market.findFirst({
@@ -225,7 +231,9 @@ export class MarketsService {
     });
 
     if (!market) {
-      throw new BadRequestException('Market does not exist for this game');
+      throw new BadRequestException(
+        'Market does not exist for this competition',
+      );
     }
 
     if (market.status !== MarketStatus.CLOSED) {

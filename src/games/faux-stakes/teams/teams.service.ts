@@ -12,13 +12,13 @@ export class TeamsService {
   ) {}
 
   async createTeams(competitionId: string, dto: CreateTeamsDto) {
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: { id: true },
     });
 
-    if (!game) {
-      throw new BadRequestException('Game does not exist');
+    if (!competition) {
+      throw new BadRequestException('Competition does not exist');
     }
 
     const names = dto.names
@@ -59,13 +59,13 @@ export class TeamsService {
   }
 
   async getTeams(competitionId: string) {
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: { id: true, members: true },
     });
 
-    if (!game) {
-      throw new BadRequestException('Game does not exist');
+    if (!competition) {
+      throw new BadRequestException('Competition does not exist');
     }
 
     return this.prisma.team.findMany({

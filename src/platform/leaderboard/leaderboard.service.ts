@@ -10,7 +10,7 @@ export class LeaderboardService {
   ) {}
 
   async getLeaderboard(userId: string, competitionId: string) {
-    const game = await this.prisma.competition.findFirst({
+    const competition = await this.prisma.competition.findFirst({
       where: {
         id: competitionId,
         members: {
@@ -23,16 +23,16 @@ export class LeaderboardService {
       },
     });
 
-    if (!game) {
+    if (!competition) {
       throw new BadRequestException(
         'Competition does not exist or user is not a member',
       );
     }
 
-    const engine = this.gameEngineRegistry.get(game.gameType);
+    const engine = this.gameEngineRegistry.get(competition.gameType);
 
     return engine.getLeaderboard({
-      competitionId: game.id,
+      competitionId: competition.id,
     });
   }
 }

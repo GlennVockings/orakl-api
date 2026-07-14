@@ -20,7 +20,7 @@ export class FauxStakesLeaderboardService {
   constructor(private prisma: PrismaService) {}
 
   private async getSettledBalances(competitionId: string) {
-    const game = await this.prisma.competition.findUnique({
+    const competition = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       include: {
         members: {
@@ -36,8 +36,8 @@ export class FauxStakesLeaderboardService {
       },
     });
 
-    if (!game) {
-      throw new BadRequestException('Game does not exist');
+    if (!competition) {
+      throw new BadRequestException('Competition does not exist');
     }
 
     const settledMarkets = await this.prisma.market.findMany({
@@ -66,7 +66,7 @@ export class FauxStakesLeaderboardService {
 
     const balanceByUser = new Map<string, number>();
 
-    for (const member of game.members) {
+    for (const member of competition.members) {
       balanceByUser.set(member.userId, 0);
     }
 
@@ -82,7 +82,7 @@ export class FauxStakesLeaderboardService {
       );
     }
 
-    const rows = game.members
+    const rows = competition.members
       .map((member) => ({
         userId: member.user.id,
         displayName: member.user.displayName,
@@ -114,7 +114,7 @@ export class FauxStakesLeaderboardService {
   }
 
   async getLeaderboardForCompetition(competitionId: string) {
-    const game = await this.prisma.competition.findFirst({
+    const competition = await this.prisma.competition.findFirst({
       where: {
         id: competitionId,
       },
@@ -132,7 +132,7 @@ export class FauxStakesLeaderboardService {
       },
     });
 
-    if (!game) {
+    if (!competition) {
       throw new BadRequestException('Competition does not exist');
     }
 
@@ -148,7 +148,7 @@ export class FauxStakesLeaderboardService {
 
     const currentBalanceByUser = new Map<string, number>();
 
-    for (const member of game.members) {
+    for (const member of competition.members) {
       currentBalanceByUser.set(member.userId, 0);
     }
 
