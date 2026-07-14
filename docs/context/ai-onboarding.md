@@ -338,17 +338,29 @@ Every change should move Orakl closer to becoming a reusable competition platfor
 
 # Current State
 
-Last updated: 2026-07-07
+Last updated: 2026-07-12
 
-The backend is currently being refactored from the original Faux Stakes implementation into the Orakl platform architecture.
+The backend foundation has been refactored into the Orakl Platform and isolated Game modules.
 
 Current status:
-- Repositories have been split into `orakl-api` and `orakl-web`.
-- `orakl-api` contains the platform backend.
-- `orakl-web` consumes the API and no longer owns Prisma or backend auth routes.
-- `docs/context` contains product and architecture context.
-- Faux Stakes code is being moved under `src/games/faux-stakes`.
-- Platform code is being introduced under `src/platform`.
-- `GameType` has been added.
-- Game Registry work is in progress.
-- Predictor folders exist but Predictor has not been implemented.
+
+- `orakl-api` and `orakl-web` are separate repositories.
+- Shared backend capabilities live under `src/platform`.
+- Game implementations live under `src/games`.
+- Faux Stakes is isolated under `src/games/faux-stakes`.
+- Competitions, authentication, database access and leaderboard delivery are Platform concerns.
+- Faux Stakes owns bets, markets, teams, ledger behaviour, configuration, realtime events and leaderboard calculation.
+- `FauxStakesCompetition` stores Faux Stakes-specific configuration separately from the shared Competition record.
+- The Game Engine contract uses context objects and a game-agnostic leaderboard result.
+- Predictor is planned but has not been implemented.
+- The current Prisma `Game` model represents a Competition instance and is scheduled to be renamed during Phase 2C.
+- `GameType` and `GameEngine` remain intentional names because they represent the ruleset, not a Competition instance.
+- The frontend still uses the previous route and feature structure and will be aligned after the backend terminology phase.
+
+Before changing architecture, read:
+
+- `docs/architecture-roadmap.md`
+- `docs/decisions.md`
+- `docs/context/architecture.md`
+- `docs/context/domain-model.md`
+- `docs/context/game-engine.md`

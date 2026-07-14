@@ -10,11 +10,11 @@ import { PrismaService } from 'src/prisma.service';
 export class CompetitionAccessService {
   constructor(private prisma: PrismaService) {}
 
-  async requireCompetitionMember(userId: string, gameId: string) {
-    const membership = await this.prisma.gameMember.findUnique({
+  async requireCompetitionMember(userId: string, competitionId: string) {
+    const membership = await this.prisma.competitionMember.findUnique({
       where: {
-        gameId_userId: {
-          gameId,
+        competitionId_userId: {
+          competitionId,
           userId,
         },
       },
@@ -29,8 +29,8 @@ export class CompetitionAccessService {
     return membership;
   }
 
-  async requireCompetitionAdmin(userId: string, gameId: string) {
-    const membership = await this.requireCompetitionMember(userId, gameId);
+  async requireCompetitionAdmin(userId: string, competitionId: string) {
+    const membership = await this.requireCompetitionMember(userId, competitionId);
 
     if (
       membership.role !== MemberRole.HOST &&

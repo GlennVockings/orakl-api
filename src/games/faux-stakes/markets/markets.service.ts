@@ -24,9 +24,9 @@ export class MarketsService {
     private readonly wsGateway: WsGateway,
   ) {}
 
-  async createMarket(gameId: string, dto: CreateMarketDto) {
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
+  async createMarket(competitionId: string, dto: CreateMarketDto) {
+    const game = await this.prisma.competition.findUnique({
+      where: { id: competitionId },
       select: { id: true },
     });
 
@@ -61,7 +61,7 @@ export class MarketsService {
         const teams = await tx.team.findMany({
           where: {
             id: { in: teamIds },
-            gameId,
+            competitionId,
           },
           select: { id: true },
         });
@@ -93,7 +93,7 @@ export class MarketsService {
 
       const market = await tx.market.create({
         data: {
-          gameId,
+          competitionId,
           name: dto.name,
           status: 'OPEN',
           selections: hasTeamSelections
@@ -119,14 +119,14 @@ export class MarketsService {
         },
       });
 
-      await tx.game.update({
-        where: { id: gameId },
+      await tx.competition.update({
+        where: { id: competitionId },
         data: {
           lastActivityAt: now,
         },
       });
 
-      this.wsGateway.emitMarketCreated(gameId, {
+      this.wsGateway.emitMarketCreated(competitionId, {
         name: dto.name,
       });
 
@@ -134,9 +134,9 @@ export class MarketsService {
     });
   }
 
-  async getMarkets(gameId: string) {
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
+  async getMarkets(competitionId: string) {
+    const game = await this.prisma.competition.findUnique({
+      where: { id: competitionId },
       select: { id: true },
     });
 
@@ -145,7 +145,7 @@ export class MarketsService {
     }
 
     return this.prisma.market.findMany({
-      where: { gameId },
+      where: { competitionId },
       orderBy: { createdAt: 'asc' },
       include: {
         selections: {
@@ -157,13 +157,13 @@ export class MarketsService {
     });
   }
 
-  async closeMarket(gameId: string, marketId: string) {
+  async closeMarket(competitionId: string, marketId: string) {
     const now = new Date();
 
     const market = await this.prisma.market.findFirst({
       where: {
         id: marketId,
-        gameId,
+        competitionId,
       },
       select: {
         id: true,
@@ -190,13 +190,13 @@ export class MarketsService {
         data: { status: MarketStatus.CLOSED },
       });
 
-      await tx.game.update({
-        where: { id: gameId },
+      await tx.competition.update({
+        where: { id: competitionId },
         data: { lastActivityAt: now },
       });
     });
 
-    this.wsGateway.emitMarketClosed(gameId, {
+    this.wsGateway.emitMarketClosed(competitionId, {
       id: market.id,
       name: market.name,
     });
@@ -208,12 +208,12 @@ export class MarketsService {
     };
   }
 
-  async settleMarket(gameId: string, marketId: string, dto: SettleMarketDto) {
+  async settleMarket(competitionId: string, marketId: string, dto: SettleMarketDto) {
     const now = new Date();
 
     const market = await this.prisma.market.findFirst({
       where: {
-        gameId,
+        competitionId,
         id: marketId,
       },
       select: {
@@ -246,7 +246,7 @@ export class MarketsService {
 
     const bets = await this.prisma.bet.findMany({
       where: {
-        gameId,
+        competitionId,
         selectionId: {
           in: marketSelections,
         },
@@ -274,9 +274,9 @@ export class MarketsService {
 
         if (!hasWon) continue;
 
-        await tx.gameLedgerTxn.create({
+        await tx.competitionLedgerTxn.create({
           data: {
-            gameId,
+            competitionId,
             userId: bet.userId,
             type: LedgerType.PAYOUT,
             amount: bet.potentialReturn,
@@ -307,15 +307,15 @@ export class MarketsService {
         },
       });
 
-      await tx.game.update({
-        where: { id: gameId },
+      await tx.competition.update({
+        where: { id: competitionId },
         data: { lastActivityAt: now },
       });
     });
 
-    await this.leaderboardService.createSnapshot(gameId, marketId);
+    await this.leaderboardService.createSnapshot(competitionId, marketId);
 
-    this.wsGateway.emitMarketSettled(gameId, {
+    this.wsGateway.emitMarketSettled(competitionId, {
       id: marketId,
       name: market.name,
       winningSelectionId: dto.winningSelectionId,

@@ -31,12 +31,12 @@ export class BetsService {
 
   private async getCurrentBalance(
     tx: Prisma.TransactionClient,
-    gameId: string,
+    competitionId: string,
     userId: string,
   ) {
-    const txns = await tx.gameLedgerTxn.findMany({
+    const txns = await tx.competitionLedgerTxn.findMany({
       where: {
-        gameId,
+        competitionId,
         userId,
       },
       select: {
@@ -51,13 +51,13 @@ export class BetsService {
     }, 0);
   }
 
-  async placeBet(userId: string, gameId: string, dto: CreateBetDto) {
+  async placeBet(userId: string, competitionId: string, dto: CreateBetDto) {
     const now = new Date();
 
     const market = await this.prisma.market.findFirst({
       where: {
         id: dto.marketId,
-        gameId,
+        competitionId,
       },
       include: {
         selections: true,
@@ -89,7 +89,7 @@ export class BetsService {
     );
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const currentBalance = await this.getCurrentBalance(tx, gameId, userId);
+      const currentBalance = await this.getCurrentBalance(tx, competitionId, userId);
 
       if (currentBalance < dto.stake) {
         throw new ForbiddenException('Insufficient balance');
@@ -97,7 +97,7 @@ export class BetsService {
 
       const bet = await tx.bet.create({
         data: {
-          gameId,
+          competitionId,
           userId,
           selectionId: dto.selectionId,
           stake,
@@ -108,9 +108,9 @@ export class BetsService {
         },
       });
 
-      await tx.gameLedgerTxn.create({
+      await tx.competitionLedgerTxn.create({
         data: {
-          gameId,
+          competitionId,
           userId,
           type: LedgerType.DEBIT,
           amount: stake,
@@ -119,12 +119,12 @@ export class BetsService {
         },
       });
 
-      await tx.game.update({
-        where: { id: gameId },
+      await tx.competition.update({
+        where: { id: competitionId },
         data: { lastActivityAt: now },
       });
 
-      const updatedBalance = await this.getCurrentBalance(tx, gameId, userId);
+      const updatedBalance = await this.getCurrentBalance(tx, competitionId, userId);
 
       return {
         bet,
@@ -135,10 +135,10 @@ export class BetsService {
     return result;
   }
 
-  async getUserBets(userId: string, gameId: string) {
+  async getUserBets(userId: string, competitionId: string) {
     const bets = await this.prisma.bet.findMany({
       where: {
-        gameId,
+        competitionId,
         userId,
       },
       orderBy: {
@@ -224,10 +224,10 @@ export class BetsService {
     });
   }
 
-  async getGameBets(gameId: string) {
+  async getGameBets(competitionId: string) {
     const bets = await this.prisma.bet.findMany({
       where: {
-        gameId,
+        competitionId,
       },
       orderBy: {
         placedAt: 'desc',
@@ -322,12 +322,12 @@ export class BetsService {
     });
   }
 
-  async undoBet(userId: string, gameId: string, betId: string) {
+  async undoBet(userId: string, competitionId: string, betId: string) {
     const now = new Date();
 
     const bet = await this.prisma.bet.findFirst({
       where: {
-        gameId,
+        competitionId,
         id: betId,
         userId,
       },
@@ -370,9 +370,9 @@ export class BetsService {
         },
       });
 
-      await tx.gameLedgerTxn.create({
+      await tx.competitionLedgerTxn.create({
         data: {
-          gameId,
+          competitionId,
           userId: bet.userId,
           type: LedgerType.REFUND,
           amount: bet.stake,

@@ -11,9 +11,9 @@ export class TeamsService {
     private wsGateway: WsGateway,
   ) {}
 
-  async createTeams(gameId: string, dto: CreateTeamsDto) {
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
+  async createTeams(competitionId: string, dto: CreateTeamsDto) {
+    const game = await this.prisma.competition.findUnique({
+      where: { id: competitionId },
       select: { id: true },
     });
 
@@ -38,7 +38,7 @@ export class TeamsService {
     try {
       await this.prisma.team.createMany({
         data: names.map((name) => ({
-          gameId,
+          competitionId,
           name,
         })),
         skipDuplicates: true,
@@ -47,20 +47,20 @@ export class TeamsService {
       throw new BadRequestException('Failed to create teams');
     }
 
-    this.wsGateway.emitTeamCreated(gameId, {
+    this.wsGateway.emitTeamCreated(competitionId, {
       createdCount: names.length,
       names,
     });
 
     return this.prisma.team.findMany({
-      where: { gameId },
+      where: { competitionId },
       orderBy: { name: 'asc' },
     });
   }
 
-  async getTeams(gameId: string) {
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
+  async getTeams(competitionId: string) {
+    const game = await this.prisma.competition.findUnique({
+      where: { id: competitionId },
       select: { id: true, members: true },
     });
 
@@ -69,15 +69,15 @@ export class TeamsService {
     }
 
     return this.prisma.team.findMany({
-      where: { gameId },
+      where: { competitionId },
       orderBy: { name: 'asc' },
     });
   }
 
-  async editTeam(gameId: string, dto: EditTeamsDto) {
+  async editTeam(competitionId: string, dto: EditTeamsDto) {
     const team = await this.prisma.team.update({
       where: {
-        gameId,
+        competitionId,
         id: dto.teamId,
       },
       data: {

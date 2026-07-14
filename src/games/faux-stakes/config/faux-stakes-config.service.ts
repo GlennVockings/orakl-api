@@ -5,9 +5,9 @@ import { PrismaService } from 'src/prisma.service';
 export class FauxStakesConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getCompetition(gameId: string) {
+  async getCompetition(competitionId: string) {
     const config = await this.prisma.fauxStakesCompetition.findUnique({
-      where: { gameId },
+      where: { competitionId },
     });
 
     if (!config) {

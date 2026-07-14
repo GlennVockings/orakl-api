@@ -1,4 +1,4 @@
-import { GameType } from './competition-type';
+import { GameType } from './game-type';
 
 export interface LeaderboardRow {
   userId: string;

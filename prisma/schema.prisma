@@ -9,7 +9,7 @@ generator client {
 }
 
 // ---------- Enums ----------
-enum GameType { 
+enum GameType {
   FAUX_STAKES
   PREDICTOR
 }
@@ -65,10 +65,10 @@ model User {
   passwordHash String? // null allowed for prototype-only presets if you want
 
   // Relationships
-  memberships          GameMember[]
-  gamesCreated         Game[]                @relation("GamesCreatedBy")
+  memberships          CompetitionMember[]
+  competitionsCreated  Competition[]          @relation("CompetitionsCreatedBy")
   bets                 Bet[]
-  ledgerTxns           GameLedgerTxn[]
+  ledgerTxns           CompetitionLedgerTxn[]
   leaderboardSnapshots LeaderboardSnapshot[]
 
   // Optional: tutorial state
@@ -79,37 +79,37 @@ model User {
   @@map("user")
 }
 
-model GameMember {
-  id       String     @id @default(cuid())
-  gameId   String
-  userId   String
-  role     MemberRole @default(PLAYER)
-  joinedAt DateTime   @default(now())
+model CompetitionMember {
+  id            String     @id @default(cuid())
+  competitionId String
+  userId        String
+  role          MemberRole @default(PLAYER)
+  joinedAt      DateTime   @default(now())
 
   lastSeenAt DateTime @default(now())
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([gameId, userId])
+  @@unique([competitionId, userId])
   @@index([userId])
-  @@index([gameId])
+  @@index([competitionId])
 }
 
-model Game {
+model Competition {
   id     String     @id @default(cuid())
   name   String
   status GameStatus @default(DRAFT)
 
-  joinCode      String @unique
+  joinCode String @unique
 
   createdById String
-  createdBy   User   @relation("GamesCreatedBy", fields: [createdById], references: [id])
-  gameType GameType @default(FAUX_STAKES)
+  createdBy   User     @relation("CompetitionsCreatedBy", fields: [createdById], references: [id])
+  gameType    GameType @default(FAUX_STAKES)
 
   // Helpful flags
   isDemo     Boolean @default(false) // for public demo mode later (still join-code controlled if you want)
-  isTemplate Boolean @default(false) // if you ever want “copy this game setup”
+  isTemplate Boolean @default(false) // if you ever want “copy this competition setup”
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -117,33 +117,33 @@ model Game {
   lastActivityAt DateTime  @default(now())
 
   // Relationships
-  members                GameMember[]
-  fauxStakesCompetition  FauxStakesCompetition?
-  teams                  Team[]
-  markets                Market[]
-  bets                   Bet[]
-  ledgerTxns             GameLedgerTxn[]
-  leaderboardSnapshots   LeaderboardSnapshot[]
+  members               CompetitionMember[]
+  fauxStakesCompetition FauxStakesCompetition?
+  teams                 Team[]
+  markets               Market[]
+  bets                  Bet[]
+  ledgerTxns            CompetitionLedgerTxn[]
+  leaderboardSnapshots  LeaderboardSnapshot[]
 
   @@index([createdById])
 }
 
 model FauxStakesCompetition {
   id            String   @id @default(cuid())
-  gameId        String   @unique
+  competitionId String   @unique
   startingChips Int      @default(1000)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
-  @@index([gameId])
+  @@index([competitionId])
 }
 
 model Team {
-  id     String @id @default(cuid())
-  gameId String
-  name   String
+  id            String @id @default(cuid())
+  competitionId String
+  name          String
 
   selections Selection[]
 
@@ -151,28 +151,28 @@ model Team {
   emoji String?
   color String?
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
-  @@unique([gameId, name])
-  @@index([gameId])
+  @@unique([competitionId, name])
+  @@index([competitionId])
 }
 
 model Market {
-  id                   String                @id @default(cuid())
-  gameId               String
+  id                   String                 @id @default(cuid())
+  competitionId        String
   name                 String
-  status               MarketStatus          @default(OPEN)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  ledgerTxns           GameLedgerTxn[]
+  status               MarketStatus           @default(OPEN)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  ledgerTxns           CompetitionLedgerTxn[]
   leaderboardSnapshots LeaderboardSnapshot[]
 
-  game       Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  selections Selection[]
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  selections  Selection[]
 
-  @@unique([gameId, name])
-  @@index([gameId])
-  @@index([gameId, status])
+  @@unique([competitionId, name])
+  @@index([competitionId])
+  @@index([competitionId, status])
 }
 
 model Selection {
@@ -192,32 +192,32 @@ model Selection {
 }
 
 model Bet {
-  id              String          @id @default(cuid())
-  gameId          String
+  id              String                 @id @default(cuid())
+  competitionId   String
   userId          String
   selectionId     String
-  stake           Decimal         @db.Decimal(12, 2)
-  oddsSnapshot    Decimal         @db.Decimal(8, 3)
-  potentialReturn Decimal         @db.Decimal(12, 2)
-  status          BetStatus       @default(PENDING)
-  placedAt        DateTime        @default(now())
+  stake           Decimal                @db.Decimal(12, 2)
+  oddsSnapshot    Decimal                @db.Decimal(8, 3)
+  potentialReturn Decimal                @db.Decimal(12, 2)
+  status          BetStatus              @default(PENDING)
+  placedAt        DateTime               @default(now())
   settledAt       DateTime?
-  ledgerTxns      GameLedgerTxn[]
+  ledgerTxns      CompetitionLedgerTxn[]
 
-  game      Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  selection Selection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selection   Selection   @relation(fields: [selectionId], references: [id], onDelete: Cascade)
 
-  @@index([gameId, userId, status])
+  @@index([competitionId, userId, status])
   @@index([selectionId])
 }
 
-model GameLedgerTxn {
-  id     String     @id @default(cuid())
-  gameId String
-  userId String
-  type   LedgerType
-  amount Decimal    @db.Decimal(12, 2)
+model CompetitionLedgerTxn {
+  id            String     @id @default(cuid())
+  competitionId String
+  userId        String
+  type          LedgerType
+  amount        Decimal    @db.Decimal(12, 2)
 
   betId String?
   bet   Bet?    @relation(fields: [betId], references: [id], onDelete: SetNull)
@@ -227,11 +227,11 @@ model GameLedgerTxn {
 
   createdAt DateTime @default(now())
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([gameId])
-  @@index([userId, gameId])
+  @@index([competitionId])
+  @@index([userId, competitionId])
   @@index([betId])
   @@index([marketId])
 }
@@ -300,18 +300,18 @@ model Jwks {
 
 model LeaderboardSnapshot {
   id             String   @id @default(cuid())
-  gameId         String
+  competitionId  String
   marketId       String
   userId         String
   settledBalance Decimal  @db.Decimal(12, 2)
   rank           Int
   createdAt      DateTime @default(now())
 
-  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  market      Market      @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([gameId, createdAt])
-  @@index([gameId, userId, createdAt])
+  @@index([competitionId, createdAt])
+  @@index([competitionId, userId, createdAt])
   @@index([marketId])
 }

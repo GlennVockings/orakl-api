@@ -19,9 +19,9 @@ function txnSign(type: LedgerType) {
 export class FauxStakesLeaderboardService {
   constructor(private prisma: PrismaService) {}
 
-  private async getSettledBalances(gameId: string) {
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
+  private async getSettledBalances(competitionId: string) {
+    const game = await this.prisma.competition.findUnique({
+      where: { id: competitionId },
       include: {
         members: {
           include: {
@@ -42,7 +42,7 @@ export class FauxStakesLeaderboardService {
 
     const settledMarkets = await this.prisma.market.findMany({
       where: {
-        gameId,
+        competitionId,
         status: 'SETTLED',
       },
       select: {
@@ -52,9 +52,9 @@ export class FauxStakesLeaderboardService {
 
     const settledMarketIds = new Set(settledMarkets.map((m) => m.id));
 
-    const txns = await this.prisma.gameLedgerTxn.findMany({
+    const txns = await this.prisma.competitionLedgerTxn.findMany({
       where: {
-        gameId,
+        competitionId,
       },
       select: {
         userId: true,
@@ -97,12 +97,12 @@ export class FauxStakesLeaderboardService {
     return rows;
   }
 
-  async createSnapshot(gameId: string, marketId: string) {
-    const rows = await this.getSettledBalances(gameId);
+  async createSnapshot(competitionId: string, marketId: string) {
+    const rows = await this.getSettledBalances(competitionId);
 
     await this.prisma.leaderboardSnapshot.createMany({
       data: rows.map((row) => ({
-        gameId,
+        competitionId,
         marketId,
         userId: row.userId,
         settledBalance: row.settledBalance,
@@ -113,10 +113,10 @@ export class FauxStakesLeaderboardService {
     return rows;
   }
 
-  async getLeaderboardForCompetition(gameId: string) {
-    const game = await this.prisma.game.findFirst({
+  async getLeaderboardForCompetition(competitionId: string) {
+    const game = await this.prisma.competition.findFirst({
       where: {
-        id: gameId,
+        id: competitionId,
       },
       include: {
         members: {
@@ -137,8 +137,8 @@ export class FauxStakesLeaderboardService {
     }
 
     // Current balance = all txns
-    const currentTxns = await this.prisma.gameLedgerTxn.findMany({
-      where: { gameId },
+    const currentTxns = await this.prisma.competitionLedgerTxn.findMany({
+      where: { competitionId },
       select: {
         userId: true,
         type: true,
@@ -161,12 +161,12 @@ export class FauxStakesLeaderboardService {
     }
 
     // Current settled ranking
-    const settledRows = await this.getSettledBalances(gameId);
+    const settledRows = await this.getSettledBalances(competitionId);
 
     // Get latest two settled markets with snapshots
     const latestSnapshotMarkets =
       await this.prisma.leaderboardSnapshot.findMany({
-        where: { gameId },
+        where: { competitionId },
         orderBy: { createdAt: 'desc' },
         select: {
           marketId: true,
@@ -184,7 +184,7 @@ export class FauxStakesLeaderboardService {
       const previousSnapshotRows =
         await this.prisma.leaderboardSnapshot.findMany({
           where: {
-            gameId,
+            competitionId,
             marketId: previousMarketId,
           },
           select: {

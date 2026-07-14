@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FauxStakesEngine } from '../../games/faux-stakes/engine/faux-stakes.engine';
-import { GameEngine } from './competition-engine.interface';
-import { GameType } from './competition-type';
+import { GameEngine } from './game-engine.interface';
+import { GameType } from './game-type';
 
 @Injectable()
 export class GameEngineRegistryService {

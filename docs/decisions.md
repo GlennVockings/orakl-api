@@ -310,3 +310,111 @@ These topics require decisions before implementation.
 - API versioning
 - Mobile architecture
 - Admin permissions
+---
+
+# ADR-007
+## Distinguish Games from Competitions
+
+**Status**
+
+✅ Accepted
+
+**Date**
+
+July 2026
+
+### Context
+
+The original backend used `Game` for both the reusable ruleset and a playable instance created by a user. As Orakl expanded beyond Faux Stakes, this caused naming ambiguity.
+
+For example, Faux Stakes and Predictor are Games, while an office Sports Day or World Cup pool is a Competition powered by one of those Games.
+
+### Decision
+
+Use the following domain distinction:
+
+- **Game** means a reusable ruleset or product experience.
+- **Competition** means a playable instance of a Game that users create and join.
+
+Keep Game terminology for:
+
+- `GameType`
+- `GameEngine`
+- `GameEngineRegistry`
+- `src/games`
+
+Use Competition terminology for:
+
+- Competition records
+- Competition members
+- Competition identifiers
+- Join codes, status and activity
+- APIs and UI representing a playable instance
+
+### Why
+
+- Matches the product language.
+- Prevents confusion between a ruleset and an instance.
+- Allows multiple Competitions to use the same Game.
+- Keeps Game Engine terminology technically and conceptually accurate.
+
+### Consequences
+
+Good
+
+- Clear domain language.
+- More understandable APIs and schemas.
+- Predictor and future Games fit naturally.
+
+Trade-offs
+
+- Requires a controlled rename of the current Prisma `Game` and `GameMember` models.
+- Temporary mixed terminology will exist during the migration.
+
+---
+
+# ADR-008
+## Game-Agnostic Leaderboard Delivery
+
+**Status**
+
+✅ Accepted
+
+**Date**
+
+July 2026
+
+### Context
+
+The original shared leaderboard contract exposed Faux Stakes fields such as `currentBalance` and `settledBalance`. Predictor and future Games will use different scoring systems.
+
+### Decision
+
+The Platform leaderboard contract uses:
+
+- `scoreLabel`
+- `rows`
+- a numeric `score`
+- shared ranking fields
+- optional game-specific `details`
+
+Each Game Engine maps its own scoring model into this shared response.
+
+### Why
+
+- Keeps the Platform independent of scoring rules.
+- Provides consistent rendering across Games.
+- Allows game-specific information without polluting shared contracts.
+
+### Consequences
+
+Good
+
+- Predictor can use points without changing the Platform contract.
+- Faux Stakes balances remain available through `details`.
+- Frontends can render a common leaderboard layout.
+
+Trade-offs
+
+- Existing clients must adapt from a raw row array to a result object.
+- Game-specific details require deliberate client handling.

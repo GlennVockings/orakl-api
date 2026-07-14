@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
-import { GameEngineRegistryService } from '../competition-registry/competition-engine-registry.service';
+import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
 
 @Injectable()
 export class LeaderboardService {
@@ -9,10 +9,10 @@ export class LeaderboardService {
     private readonly gameEngineRegistry: GameEngineRegistryService,
   ) {}
 
-  async getLeaderboard(userId: string, gameId: string) {
-    const game = await this.prisma.game.findFirst({
+  async getLeaderboard(userId: string, competitionId: string) {
+    const game = await this.prisma.competition.findFirst({
       where: {
-        id: gameId,
+        id: competitionId,
         members: {
           some: { userId },
         },
@@ -25,7 +25,7 @@ export class LeaderboardService {
 
     if (!game) {
       throw new BadRequestException(
-        'Game does not exist or user is not a member',
+        'Competition does not exist or user is not a member',
       );
     }
 

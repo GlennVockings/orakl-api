@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { MemberRole } from '@prisma/client';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
-import { GameEngineRegistryService } from '../competition-registry/competition-engine-registry.service';
+import { GameEngineRegistryService } from '../game-registry/game-engine-registry.service';
 
 @Injectable()
 export class CompetitionsService {
@@ -34,7 +34,7 @@ export class CompetitionsService {
     for (let i = 0; i < 10; i++) {
       const code = this.generateJoinCode(6);
 
-      const exists = await this.prisma.game.findUnique({
+      const exists = await this.prisma.competition.findUnique({
         where: { joinCode: code },
       });
 
@@ -51,7 +51,7 @@ export class CompetitionsService {
 
       try {
         const game = await this.prisma.$transaction(async (tx) => {
-          const createdCompetition = await tx.game.create({
+          const createdCompetition = await tx.competition.create({
             data: {
               name: dto.name,
               joinCode,
@@ -94,7 +94,7 @@ export class CompetitionsService {
   }
 
   async getAll(userId: string) {
-    const games = await this.prisma.game.findMany({
+    const games = await this.prisma.competition.findMany({
       where: {
         members: {
           some: {
@@ -164,7 +164,7 @@ export class CompetitionsService {
   async joinCompetition(userId: string, dto: JoinCompetitionDto) {
     const joinCode = dto.joinCode.trim().toUpperCase();
 
-    const game = await this.prisma.game.findFirst({
+    const game = await this.prisma.competition.findFirst({
       where: { joinCode },
       select: {
         id: true,
@@ -185,20 +185,20 @@ export class CompetitionsService {
     const now = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const membership = await tx.gameMember.upsert({
-        where: { gameId_userId: { gameId: game.id, userId } },
+      const membership = await tx.competitionMember.upsert({
+        where: { competitionId_userId: { competitionId: game.id, userId } },
         update: {
           lastSeenAt: now,
         },
         create: {
-          gameId: game.id,
+          competitionId: game.id,
           userId,
           role: 'PLAYER',
           lastSeenAt: now,
         },
       });
 
-      await tx.game.update({
+      await tx.competition.update({
         where: { id: game.id },
         data: { lastActivityAt: now },
       });
@@ -216,18 +216,18 @@ export class CompetitionsService {
     return result;
   }
 
-  async markSeen(userId: string, gameId: string) {
+  async markSeen(userId: string, competitionId: string) {
     const now = new Date();
-    await this.prisma.gameMember.update({
-      where: { gameId_userId: { gameId, userId } },
+    await this.prisma.competitionMember.update({
+      where: { competitionId_userId: { competitionId, userId } },
       data: { lastSeenAt: now },
     });
     return { ok: true };
   }
 
-  async getCompetition(userId: string, gameId: string) {
-    const game = await this.prisma.game.findFirst({
-      where: { id: gameId },
+  async getCompetition(userId: string, competitionId: string) {
+    const game = await this.prisma.competition.findFirst({
+      where: { id: competitionId },
       select: {
         id: true,
         name: true,
@@ -243,16 +243,16 @@ export class CompetitionsService {
     return game;
   }
 
-  async deleteCompetition(userId: string, gameId: string) {
-    const membership = await this.prisma.gameMember.findUnique({
+  async deleteCompetition(userId: string, competitionId: string) {
+    const membership = await this.prisma.competitionMember.findUnique({
       where: {
-        gameId_userId: {
-          gameId,
+        competitionId_userId: {
+          competitionId,
           userId,
         },
       },
       include: {
-        game: {
+        competition: {
           select: {
             id: true,
             name: true,
@@ -274,27 +274,27 @@ export class CompetitionsService {
       throw new ForbiddenException('User is not allowed to delete this game');
     }
 
-    await this.prisma.game.delete({
-      where: { id: gameId },
+    await this.prisma.competition.delete({
+      where: { id: competitionId },
     });
 
     return {
       ok: true,
-      deletedCompetitionId: gameId,
-      deletedCompetitionName: membership.game.name,
+      deletedCompetitionId: competitionId,
+      deletedCompetitionName: membership.competition.name,
     };
   }
 
-  async getMe(userId: string, gameId: string) {
-    const membership = await this.prisma.gameMember.findUnique({
+  async getMe(userId: string, competitionId: string) {
+    const membership = await this.prisma.competitionMember.findUnique({
       where: {
-        gameId_userId: {
-          gameId,
+        competitionId_userId: {
+          competitionId,
           userId,
         },
       },
       include: {
-        game: {
+        competition: {
           select: {
             id: true,
             createdAt: true,
@@ -311,11 +311,11 @@ export class CompetitionsService {
       );
     }
 
-    const engine = this.gameEngineRegistry.get(membership.game.gameType);
+    const engine = this.gameEngineRegistry.get(membership.competition.gameType);
     const playerState =
       (await engine.getPlayerState?.({
         userId,
-        competitionId: membership.game.id,
+        competitionId: membership.competition.id,
       })) ?? {};
 
     return {
@@ -324,7 +324,7 @@ export class CompetitionsService {
       isAdmin: membership.role === 'ADMIN' || membership.role === 'HOST',
       ...playerState,
       lastSeenAt: membership.lastSeenAt,
-      hasUpdates: membership.game.lastActivityAt > membership.lastSeenAt,
+      hasUpdates: membership.competition.lastActivityAt > membership.lastSeenAt,
     };
   }
 }

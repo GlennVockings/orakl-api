@@ -7,8 +7,8 @@ import {
   GameEngine,
   GamePlayerState,
   LeaderboardResult,
-} from '../../../platform/competition-registry/competition-engine.interface';
-import { GameType } from '../../../platform/competition-registry/competition-type';
+} from '../../../platform/game-registry/game-engine.interface';
+import { GameType } from '../../../platform/game-registry/game-type';
 import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
 import { PrismaService } from '../../../prisma.service';
@@ -49,9 +49,9 @@ export class FauxStakesEngine implements GameEngine {
     userId,
     competitionId,
   }: CompetitionUserContext): Promise<GamePlayerState> {
-    const txns = await this.prisma.gameLedgerTxn.findMany({
+    const txns = await this.prisma.competitionLedgerTxn.findMany({
       where: {
-        gameId: competitionId,
+        competitionId,
         userId,
       },
       select: {
@@ -68,7 +68,7 @@ export class FauxStakesEngine implements GameEngine {
 
     const settledMarkets = await this.prisma.market.findMany({
       where: {
-        gameId: competitionId,
+        competitionId,
         status: 'SETTLED',
       },
       select: {
@@ -98,7 +98,7 @@ export class FauxStakesEngine implements GameEngine {
   }: CompetitionUserContext): Promise<GameCompetitionSummary> {
     const config = await this.configService.getCompetition(competitionId);
 
-    const game = await this.prisma.game.findUnique({
+    const game = await this.prisma.competition.findUnique({
       where: { id: competitionId },
       select: {
         members: {
@@ -121,8 +121,8 @@ export class FauxStakesEngine implements GameEngine {
       };
     }
 
-    const txns = await this.prisma.gameLedgerTxn.findMany({
-      where: { gameId: competitionId },
+    const txns = await this.prisma.competitionLedgerTxn.findMany({
+      where: { competitionId },
       select: {
         userId: true,
         type: true,
@@ -184,12 +184,12 @@ export class FauxStakesEngine implements GameEngine {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.fauxStakesCompetition.upsert({
-        where: { gameId: competitionId },
+        where: { competitionId },
         update: {
           startingChips,
         },
         create: {
-          gameId: competitionId,
+          competitionId,
           startingChips,
         },
       });
@@ -197,25 +197,25 @@ export class FauxStakesEngine implements GameEngine {
       if (uniqueTeamNames.length > 0) {
         await tx.team.createMany({
           data: uniqueTeamNames.map((name) => ({
-            gameId: competitionId,
+            competitionId,
             name,
           })),
           skipDuplicates: true,
         });
       }
 
-      const existingCredit = await tx.gameLedgerTxn.findFirst({
+      const existingCredit = await tx.competitionLedgerTxn.findFirst({
         where: {
-          gameId: competitionId,
+          competitionId,
           userId: hostUserId,
         },
         select: { id: true },
       });
 
       if (!existingCredit) {
-        await tx.gameLedgerTxn.create({
+        await tx.competitionLedgerTxn.create({
           data: {
-            gameId: competitionId,
+            competitionId,
             userId: hostUserId,
             type: 'CREDIT',
             amount: startingChips,
@@ -239,15 +239,15 @@ export class FauxStakesEngine implements GameEngine {
     if (!user) return;
 
     await this.prisma.$transaction(async (tx) => {
-      const hasAnyTxn = await tx.gameLedgerTxn.findFirst({
-        where: { gameId: competitionId, userId },
+      const hasAnyTxn = await tx.competitionLedgerTxn.findFirst({
+        where: { competitionId, userId },
         select: { id: true },
       });
 
       if (!hasAnyTxn) {
-        await tx.gameLedgerTxn.create({
+        await tx.competitionLedgerTxn.create({
           data: {
-            gameId: competitionId,
+            competitionId,
             userId,
             type: 'CREDIT',
             amount: config.startingChips,

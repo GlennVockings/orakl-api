@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
-import { GameRegistryModule } from './competition-registry/competition-registry.module';
+import { GameRegistryModule } from './game-registry/game-registry.module';
 import { PlatformLeaderboardModule } from './leaderboard/leaderboard.module';
 
 @Module({
