@@ -15,45 +15,48 @@ import { getUserIdFromJwtPayload } from 'src/platform/auth/auth-user';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { EditTeamsDto } from './dto/edit-team.dto';
 
-@Controller('games/:gameId/teams')
+@Controller('/competitions/:competitionId/faux-stakes/teams')
 export class TeamsController {
   constructor(
-    private teams: TeamsService,
-    private competitionAccess: CompetitionAccessService,
+    private readonly teams: TeamsService,
+    private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
   @Post()
   async createTeams(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
     @Body() body: CreateTeamsDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
-    return this.teams.createTeams(gameId, body);
+    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    return this.teams.createTeams(competitionId, body);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Get()
   async getTeams(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.competitionAccess.requireCompetitionMember(userId, gameId);
-    return this.teams.getTeams(gameId);
+    await this.competitionAccess.requireCompetitionMember(
+      userId,
+      competitionId,
+    );
+    return this.teams.getTeams(competitionId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
   @Patch()
   async editTeam(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
     @Body() body: EditTeamsDto,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
-    return this.teams.editTeam(gameId, body);
+    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    return this.teams.editTeam(competitionId, body);
   }
 }

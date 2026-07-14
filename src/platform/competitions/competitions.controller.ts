@@ -16,7 +16,7 @@ import { getUserIdFromJwtPayload } from '../auth/auth-user';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
 import { CompetitionAccessService } from './competition-access.service';
 
-@Controller('games')
+@Controller('competitions')
 export class CompetitionsController {
   constructor(
     private readonly competitions: CompetitionsService,
@@ -24,7 +24,7 @@ export class CompetitionsController {
   ) {}
 
   @UseGuards(BetterAuthJwtGuard)
-  @Post('/create')
+  @Post()
   async create(
     @Req() req: { user: string },
     @Body() body: CreateCompetitionDto,
@@ -51,40 +51,43 @@ export class CompetitionsController {
   }
 
   @UseGuards(BetterAuthJwtGuard)
-  @Get(':gameId')
+  @Get(':competitionId')
   async getCompetition(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.competitions.getCompetition(userId, gameId);
+    return this.competitions.getCompetition(userId, competitionId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
-  @Patch(':gameId/seen')
+  @Patch(':competitionId/seen')
   async markSeen(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.competitions.markSeen(userId, gameId);
+    return this.competitions.markSeen(userId, competitionId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
-  @Delete(':gameId')
+  @Delete(':competitionId')
   async deleteCompetition(
     @Req() req: { user: string },
-    @Param('gameId') gameId: string,
+    @Param('competitionId') competitionId: string,
   ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    await this.competitionAccess.requireCompetitionAdmin(userId, gameId);
-    return this.competitions.deleteCompetition(userId, gameId);
+    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    return this.competitions.deleteCompetition(userId, competitionId);
   }
 
   @UseGuards(BetterAuthJwtGuard)
-  @Get(':gameId/me')
-  async getMe(@Req() req: { user: string }, @Param('gameId') gameId: string) {
+  @Get(':competitionId/me')
+  async getMe(
+    @Req() req: { user: string },
+    @Param('competitionId') competitionId: string,
+  ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.competitions.getMe(userId, gameId);
+    return this.competitions.getMe(userId, competitionId);
   }
 }

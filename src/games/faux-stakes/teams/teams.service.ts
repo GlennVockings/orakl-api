@@ -7,8 +7,8 @@ import { EditTeamsDto } from './dto/edit-team.dto';
 @Injectable()
 export class TeamsService {
   constructor(
-    private prisma: PrismaService,
-    private wsGateway: WsGateway,
+    private readonly prisma: PrismaService,
+    private readonly wsGateway: WsGateway,
   ) {}
 
   async createTeams(competitionId: string, dto: CreateTeamsDto) {

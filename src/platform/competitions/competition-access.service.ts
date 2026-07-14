@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class CompetitionAccessService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async requireCompetitionMember(userId: string, competitionId: string) {
     const membership = await this.prisma.competitionMember.findUnique({
@@ -30,7 +30,10 @@ export class CompetitionAccessService {
   }
 
   async requireCompetitionAdmin(userId: string, competitionId: string) {
-    const membership = await this.requireCompetitionMember(userId, competitionId);
+    const membership = await this.requireCompetitionMember(
+      userId,
+      competitionId,
+    );
 
     if (
       membership.role !== MemberRole.HOST &&

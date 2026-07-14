@@ -13,8 +13,8 @@ import { GameEngineRegistryService } from '../game-registry/game-engine-registry
 @Injectable()
 export class CompetitionsService {
   constructor(
-    private prisma: PrismaService,
-    private gameEngineRegistry: GameEngineRegistryService,
+    private readonly prisma: PrismaService,
+    private readonly gameEngineRegistry: GameEngineRegistryService,
   ) {}
 
   private generateJoinCode(length = 6): string {
@@ -50,12 +50,13 @@ export class CompetitionsService {
       const now = new Date();
 
       try {
-        const game = await this.prisma.$transaction(async (tx) => {
+        const competition = await this.prisma.$transaction(async (tx) => {
           const createdCompetition = await tx.competition.create({
             data: {
               name: dto.name,
               joinCode,
               createdById: userId,
+              gameType: dto.gameType,
               status: 'DRAFT',
               lastActivityAt: now,
               members: {
@@ -73,15 +74,15 @@ export class CompetitionsService {
           return createdCompetition;
         });
 
-        const engine = this.gameEngineRegistry.get(game.gameType);
+        const engine = this.gameEngineRegistry.get(competition.gameType);
 
         await engine.onCompetitionCreated?.({
-          competitionId: game.id,
+          competitionId: competition.id,
           hostUserId: userId,
           config: dto.config,
         });
 
-        return game;
+        return competition;
       } catch (err: any) {
         if (err.code === 'P2002') {
           continue;

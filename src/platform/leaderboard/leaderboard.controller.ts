@@ -4,14 +4,17 @@ import { getUserIdFromJwtPayload } from '../auth/auth-user';
 import { BetterAuthJwtGuard } from '../auth/better-auth-jwt.guard';
 import { LeaderboardService } from './leaderboard.service';
 
-@Controller('games')
+@Controller('competitions')
 @UseGuards(BetterAuthJwtGuard)
 export class LeaderboardController {
   constructor(private readonly leaderboardService: LeaderboardService) {}
 
-  @Get(':gameId/leaderboard')
-  getLeaderboard(@Req() req: Request, @Param('gameId') gameId: string) {
+  @Get(':competitionId/leaderboard')
+  getLeaderboard(
+    @Req() req: Request,
+    @Param('competitionId') competitionId: string,
+  ) {
     const userId = getUserIdFromJwtPayload(req.user);
-    return this.leaderboardService.getLeaderboard(userId, gameId);
+    return this.leaderboardService.getLeaderboard(userId, competitionId);
   }
 }
