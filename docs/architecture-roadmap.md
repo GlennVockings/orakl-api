@@ -154,205 +154,175 @@ Architectural improvements should be small, reviewable, independently testable a
 
 ---
 
-# Completed Phases
+## Completed
 
-## Phase 1A — Platform and Game Separation
-
-Status: ✅ Complete
+### ✅ Phase 1A — Platform and Game Separation
 
 Completed:
+- Platform/Game separation
+- Game registry
+- Engine abstraction
+- Shared competition lifecycle
 
-- Split shared Platform code from Faux Stakes gameplay code
-- Introduced Platform and Games aggregation modules
-- Introduced shared DatabaseModule
-- Moved Competitions into the Platform
-- Introduced Game Engine Registry
-- Split shared leaderboard delivery from Faux Stakes leaderboard calculation
-- Removed Platform dependency on the Faux Stakes WebSocket gateway
-- Introduced lifecycle delegation for competition creation and user joins
+---
 
-## Phase 1B — Game Configuration Separation
-
-Status: ✅ Complete
+### ✅ Phase 1B — Game Configuration Separation
 
 Completed:
+- FauxStakesCompetition
+- Config service
+- Platform configuration removal
+- Game-owned configuration
 
-- Added `FauxStakesCompetition` extension model
-- Moved `startingChips` out of the shared model
-- Added `FauxStakesConfigService`
-- Made the Platform creation DTO generic using `config`
-- Moved Faux Stakes setup and reads behind the Faux Stakes engine
+---
 
-## Phase 2A — Engine Contracts
-
-Status: ✅ Complete
+### ✅ Phase 2A — Engine Contracts
 
 Completed:
+- Context objects
+- Explicit engine contracts
+- Shared summary contracts
 
-- Replaced positional engine arguments with context objects
-- Added competition, user and creation context types
-- Separated game summary data from membership enrichment
-- Removed the temporary `_engineMembership` merge workaround
+---
 
-## Phase 2B — Shared Platform Contracts
-
-Status: ✅ Complete
+### ✅ Phase 2B — Shared Platform Contracts
 
 Completed:
+- Shared leaderboard contract
+- Extracted GameType
+- Game-agnostic platform interfaces
 
-- Extracted `GameType` from the engine interface
-- Introduced a game-agnostic leaderboard result
-- Standardised leaderboard output using `score`, `scoreLabel`, `rows` and optional game-specific `details`
-- Began terminology cleanup around registry files
+---
 
-Note:
+### ✅ Phase 2C — Competition Terminology
 
-The current `competition-registry` directory is partially renamed while the classes still use `GameEngine` terminology. Phase 2C will restore consistent naming based on the Game-versus-Competition distinction.
+Completed:
+- Competition Prisma models
+- Competition services
+- Competition API terminology
+- Clear Game vs Competition distinction
+
+---
+
+### ✅ Phase 3A — API Alignment
+
+Completed:
+- /competitions platform routes
+- Faux Stakes namespaced routes
+- Explicit gameType support
+- API consistency
 
 ---
 
 # Current Phase
 
-## Phase 2C — Competition Instance Terminology
+## Phase 4 — Platform Hardening
 
-Status: 🟡 Planned
+Status
 
-Goal:
+🟡 Planning
 
-Rename concepts that represent playable Competition instances while preserving Game terminology for rulesets and engines.
+Goal
 
-### Keep as Game terminology
+Strengthen the platform before introducing another frontend and another game.
 
-- `GameType`
-- `GameEngine`
-- `GameEngineRegistryService`
-- `GameRegistryModule`
-- `src/games`
-- `FauxStakesEngine`
-- `PredictorEngine`
+Success criteria
 
-### Rename to Competition terminology
-
-- Prisma `Game` model → `Competition`
-- Prisma `GameMember` → `CompetitionMember`
-- shared `gameId` foreign keys → `competitionId`
-- service parameters representing an instance → `competitionId`
-- user-facing messages referring to an instance as a game → competition
-- shared repository relations such as `gamesCreated` → `competitionsCreated`
-
-### Phase 2C work units
-
-1. Restore registry directory/file naming to `game-registry` while retaining the current engine contract.
-2. Rename TypeScript instance variables and parameters from `game`/`gameId` to `competition`/`competitionId` where they refer to a Competition.
-3. Rename Prisma shared models and relations with a controlled migration.
-4. Rename remaining foreign keys and generated Prisma client usages.
-5. Run build, lint, migrations and behavioural checks.
-
-Routes remain unchanged during the backend model rename to avoid combining database, API and frontend changes in one phase.
+- Platform contracts are stable.
+- Developer experience is consistent.
+- Core platform behaviour is protected by tests.
 
 ---
 
-# Planned Phases
+# Roadmap
 
-## Phase 3 — API and Frontend Alignment
+## Phase 4
 
-Status: ⬜ Planned
+Platform Hardening
 
-Goals:
+### 4A — Developer Experience
 
-- Rename `/games` API routes to `/competitions`
-- Update response and request terminology
-- Refactor `orakl-web` into an Orakl shell with a Faux Stakes game area
-- Rename frontend hooks, pages and components from Game-instance terminology to Competition
-- Update the frontend for the generic leaderboard response
-- Complete Orakl branding
+- CurrentUser decorator
+- Request typing
+- Logger
+- Config module
+- Error handling consistency
 
-## Phase 4 — Predictor Backend
+---
 
-Status: ⬜ Planned
+### 4B — Platform Safety
 
-Goals:
+- Access audit
+- Game configuration validation
+- Lifecycle consistency
+- Transactions
+- Tests
 
-- Add `PredictorCompetition` extension model
-- Implement PredictorEngine
-- Add templates, fixtures, predictions, results and scoring
-- Implement tournament configuration and progression
-- Integrate with shared competition membership and leaderboard delivery
+---
 
-V1 remains template-first. Custom predictors are deferred.
+### 4C — Operations
 
-## Phase 5 — Predictor Frontend
+- Health endpoint
+- Startup validation
+- Environment configuration
+- Swagger polish
 
-Status: ⬜ Planned
+---
 
-Goals:
+## Phase 5
 
-- Choose Game during competition creation
-- Choose Predictor template
-- Render group and knockout structures
-- Build prediction entry and admin result workflows
+Frontend Alignment
 
-## Phase 6 — Platform Administration
+Goal
 
-Status: ⬜ Planned
+Align Orakl Web with the new platform architecture.
 
-Potential work:
+---
 
-- Game enable/disable and maintenance controls
-- Competition moderation
-- Operational dashboards
-- Audit logging
-- Support tooling
+## Phase 6
 
-## Phase 7 — Additional Games and Clients
+Predictor
 
-Status: ⬜ Future
+Goal
 
-Potential Games:
+Implement the first additional Game using the new architecture.
 
-- Quiz
-- Fantasy
-- Draft
-- Pick'em
+Success criterion
 
-Potential clients:
+Predictor should require little or no Platform changes.
 
-- Mobile
-- TV
+---
+
+## Phase 7
+
+Administration
+
+---
+
+## Phase 8
+
+Additional Games
 
 ---
 
 # Roadmap Backlog
 
-## High Priority
+## Platform
 
-- Competition lifecycle/domain events
-- Engine registration that scales beyond manual constructor wiring
-- Strong validation of game-specific `config`
-- Automated tests for creation, joining, settlement and leaderboard delivery
-- Consistent use of shared CompetitionAccessService
+- Plugin discovery
+- Domain events
+- Stronger typing
+- Background jobs
 
-## Engineering Standards
+## Operations
 
-- Standardise constructor injection with `private readonly`
-- Introduce an Orakl-owned authenticated user payload
-- Consider a reusable `@CurrentUser()` decorator after auth normalisation
-- Replace `console.log` with Nest Logger
-- Move CORS and WebSocket origins to configuration
-- Correct package database scripts that still reference the former monorepo path
+- Metrics
+- Audit logs
+- API versioning
+- Rate limiting
 
-## Before Production
+## Future
 
-- Health, readiness and liveness endpoints
-- API versioning decision
-- Audit logging strategy
-- Error response standard
-- Deployment and observability documentation
-
-## Future Platform Capabilities
-
-- Public SDK
-- Public API
-- Webhooks
-- AI-assisted game creation and analysis
-- Cross-game competition experiences
+- Mobile clients
+- TV clients
+- AI-generated competitions

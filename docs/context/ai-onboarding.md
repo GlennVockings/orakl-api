@@ -336,31 +336,13 @@ A successful contribution to Orakl should:
 
 Every change should move Orakl closer to becoming a reusable competition platform rather than a collection of independent applications.
 
-# Current State
+## Current Focus
 
-Last updated: 2026-07-12
+The current priority is Platform Hardening.
 
-The backend foundation has been refactored into the Orakl Platform and isolated Game modules.
+When proposing work:
 
-Current status:
-
-- `orakl-api` and `orakl-web` are separate repositories.
-- Shared backend capabilities live under `src/platform`.
-- Game implementations live under `src/games`.
-- Faux Stakes is isolated under `src/games/faux-stakes`.
-- Competitions, authentication, database access and leaderboard delivery are Platform concerns.
-- Faux Stakes owns bets, markets, teams, ledger behaviour, configuration, realtime events and leaderboard calculation.
-- `FauxStakesCompetition` stores Faux Stakes-specific configuration separately from the shared Competition record.
-- The Game Engine contract uses context objects and a game-agnostic leaderboard result.
-- Predictor is planned but has not been implemented.
-- The current Prisma `Game` model represents a Competition instance and is scheduled to be renamed during Phase 2C.
-- `GameType` and `GameEngine` remain intentional names because they represent the ruleset, not a Competition instance.
-- The frontend still uses the previous route and feature structure and will be aligned after the backend terminology phase.
-
-Before changing architecture, read:
-
-- `docs/architecture-roadmap.md`
-- `docs/decisions.md`
-- `docs/context/architecture.md`
-- `docs/context/domain-model.md`
-- `docs/context/game-engine.md`
+1. Prefer strengthening existing architecture.
+2. Avoid introducing new abstractions without a clear requirement.
+3. Keep Game and Competition terminology consistent.
+4. Continue making small, independently reviewable changes.

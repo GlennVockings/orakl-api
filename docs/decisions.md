@@ -418,3 +418,46 @@ Trade-offs
 
 - Existing clients must adapt from a raw row array to a result object.
 - Game-specific details require deliberate client handling.
+
+---
+
+# ADR-010
+
+## Platform Hardening Before Expansion
+
+Status
+
+Accepted
+
+### Context
+
+The core architecture of Orakl has stabilised.
+
+The next planned work included:
+
+- Frontend refactor
+- Predictor
+
+Both would substantially increase the number of consumers of the Platform API.
+
+### Decision
+
+Introduce a Platform Hardening phase before expanding the product.
+
+### Why
+
+This allows:
+
+- Developer experience improvements.
+- Better validation.
+- Platform safety.
+- Operational improvements.
+- Automated testing.
+
+before additional clients and games depend on the platform.
+
+### Consequences
+
+The platform becomes the stable foundation for all future development.
+
+Predictor becomes a validation of the architecture rather than another architectural refactor.
