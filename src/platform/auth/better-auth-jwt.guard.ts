@@ -9,7 +9,7 @@ import type { Request } from 'express';
 import type { AuthenticatedRequest } from './auth-request';
 
 const jwksUrl = new URL(
-  process.env.BETTER_AUTH_JWKS_URL ?? 'http://localhost:3000/api/auth/jwks',
+  process.env.BETTER_AUTH_JWKS_URL ?? 'http://localhost:3001/api/auth/jwks',
 );
 const JWKS = createRemoteJWKSet(jwksUrl);
 
