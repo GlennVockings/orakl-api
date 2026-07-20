@@ -1,15 +1,6 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { BetsService } from './bets.service';
-import { BetterAuthJwtGuard } from 'src/platform/auth/better-auth-jwt.guard';
-import { getUserIdFromJwtPayload } from 'src/platform/auth/auth-user';
+import { BetterAuthJwtGuard, CurrentUserId } from 'src/platform/auth';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 
@@ -23,11 +14,10 @@ export class BetsController {
   @UseGuards(BetterAuthJwtGuard)
   @Post()
   async placeBet(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: CreateBetDto,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(
       userId,
       competitionId,
@@ -38,10 +28,9 @@ export class BetsController {
   @UseGuards(BetterAuthJwtGuard)
   @Get()
   async getUserBets(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(
       userId,
       competitionId,
@@ -52,11 +41,10 @@ export class BetsController {
   @UseGuards(BetterAuthJwtGuard)
   @Post(':betId/undo')
   async undoBet(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('betId') betId: string,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(
       userId,
       competitionId,

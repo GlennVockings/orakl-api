@@ -7,10 +7,12 @@ import {
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Request } from 'express';
 import type { AuthenticatedRequest } from './auth-request';
+import { mapJwtPayloadToUser } from './map-jwt-payload-to-user';
 
 const jwksUrl = new URL(
   process.env.BETTER_AUTH_JWKS_URL ?? 'http://localhost:3001/api/auth/jwks',
 );
+
 const JWKS = createRemoteJWKSet(jwksUrl);
 
 function getBearerToken(req: Request): string | null {
@@ -33,7 +35,7 @@ export class BetterAuthJwtGuard implements CanActivate {
       const { payload } = await jwtVerify(token, JWKS);
 
       // attach for later use
-      req.user = payload;
+      req.user = mapJwtPayloadToUser(payload);
 
       return true;
     } catch {

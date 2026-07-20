@@ -1,14 +1,5 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
-import { BetterAuthJwtGuard } from '../../../platform/auth/better-auth-jwt.guard';
-import { getUserIdFromJwtPayload } from '../../../platform/auth/auth-user';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { BetterAuthJwtGuard, CurrentUserId } from '../../../platform/auth';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
@@ -24,11 +15,10 @@ export class MarketsController {
   @UseGuards(BetterAuthJwtGuard)
   @Post()
   async createMarket(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: CreateMarketDto,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
     return this.markets.createMarket(competitionId, body);
   }
@@ -36,10 +26,9 @@ export class MarketsController {
   @UseGuards(BetterAuthJwtGuard)
   @Get()
   async getMarkets(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionMember(
       userId,
       competitionId,
@@ -50,12 +39,11 @@ export class MarketsController {
   @UseGuards(BetterAuthJwtGuard)
   @Post(':marketId/settle')
   async settleMarket(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('marketId') marketId: string,
     @Body() body: SettleMarketDto,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
     return this.markets.settleMarket(competitionId, marketId, body);
   }
@@ -63,11 +51,10 @@ export class MarketsController {
   @UseGuards(BetterAuthJwtGuard)
   @Post(':marketId/close')
   async closeMarket(
-    @Req() req: { user: string },
+    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('marketId') marketId: string,
   ) {
-    const userId = getUserIdFromJwtPayload(req.user);
     await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
     return this.markets.closeMarket(competitionId, marketId);
   }
