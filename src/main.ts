@@ -2,6 +2,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { OraklConfiguration } from './config/configuration';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -17,7 +19,12 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = process.env.PORT ? Number(process.env.PORT) : 3001;
+  const config =
+    app.get<ConfigService<OraklConfiguration, true>>(ConfigService);
+
+  const port = config.get('app.port', {
+    infer: true,
+  });
   await app.listen(port, '0.0.0.0');
 }
 

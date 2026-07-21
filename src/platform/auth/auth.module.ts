@@ -4,18 +4,21 @@ import { DatabaseModule } from '../database/database.module';
 import { PrismaService } from '../../prisma.service';
 import { BetterAuthJwtGuard } from './better-auth-jwt.guard';
 import { createBetterAuth } from './better-auth/better-auth.factory';
+import { ConfigService } from '@nestjs/config';
+import type { OraklConfiguration } from '../../config/configuration';
 
 @Module({
   imports: [
     DatabaseModule,
     BetterAuthNestModule.forRootAsync({
       imports: [DatabaseModule],
-      inject: [PrismaService],
-      useFactory: (prisma: PrismaService) => ({
-        auth: createBetterAuth(prisma),
-        // Keep the existing per-controller JWT guard during migration.
+      inject: [PrismaService, ConfigService],
+      useFactory: (
+        prisma: PrismaService,
+        config: ConfigService<OraklConfiguration, true>,
+      ) => ({
+        auth: createBetterAuth(prisma, config),
         disableGlobalAuthGuard: true,
-        // main.ts already owns application CORS.
         disableTrustedOriginsCors: true,
       }),
     }),

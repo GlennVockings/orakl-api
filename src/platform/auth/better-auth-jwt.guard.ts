@@ -4,41 +4,61 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { ConfigService } from '@nestjs/config';
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { Request } from 'express';
+import type { OraklConfiguration } from '../../config/configuration';
 import type { AuthenticatedRequest } from './auth-request';
 import { mapJwtPayloadToUser } from './map-jwt-payload-to-user';
 
-const jwksUrl = new URL(
-  process.env.BETTER_AUTH_JWKS_URL ?? 'http://localhost:3001/api/auth/jwks',
-);
-
-const JWKS = createRemoteJWKSet(jwksUrl);
-
 function getBearerToken(req: Request): string | null {
-  const authHeader = req.header('authorization'); // ✅ typed helper from express
-  if (!authHeader) return null;
+  const authHeader = req.header('authorization');
+
+  if (!authHeader) {
+    return null;
+  }
+
   const [scheme, token] = authHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) return null;
+
+  if (scheme !== 'Bearer' || !token) {
+    return null;
+  }
+
   return token;
 }
 
 @Injectable()
 export class BetterAuthJwtGuard implements CanActivate {
-  async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+  private readonly jwks: JWTVerifyGetKey;
 
-    const token = getBearerToken(req);
-    if (!token) throw new UnauthorizedException('Missing bearer token');
+  constructor(config: ConfigService<OraklConfiguration, true>) {
+    const jwksUrl = config.get('auth.jwksUrl', {
+      infer: true,
+    });
+
+    this.jwks = createRemoteJWKSet(new URL(jwksUrl));
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    const token = getBearerToken(request);
+
+    if (!token) {
+      throw new UnauthorizedException('Missing bearer token');
+    }
 
     try {
-      const { payload } = await jwtVerify(token, JWKS);
+      const { payload } = await jwtVerify(token, this.jwks);
 
-      // attach for later use
-      req.user = mapJwtPayloadToUser(payload);
+      request.user = mapJwtPayloadToUser(payload);
 
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
       throw new UnauthorizedException('Invalid token');
     }
   }
