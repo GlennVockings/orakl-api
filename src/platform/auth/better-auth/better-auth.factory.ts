@@ -1,6 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
-import { betterAuth } from 'better-auth';
+import type { PrismaClient } from '@prisma/client';
+import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { bearer, jwt } from 'better-auth/plugins';
 import type { OraklConfiguration } from '../../../config/configuration';
@@ -9,7 +9,7 @@ export function createBetterAuth(
   prisma: PrismaClient,
   config: ConfigService<OraklConfiguration, true>,
 ) {
-  return betterAuth({
+  const options = {
     secret: config.get('auth.secret', {
       infer: true,
     }),
@@ -39,5 +39,7 @@ export function createBetterAuth(
     trustedOrigins: config.get('auth.trustedOrigins', {
       infer: true,
     }),
-  });
+  } satisfies BetterAuthOptions;
+
+  return betterAuth(options);
 }

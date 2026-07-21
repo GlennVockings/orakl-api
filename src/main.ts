@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -10,17 +9,21 @@ async function bootstrap() {
     bodyParser: false,
   });
 
+  const config =
+    app.get<ConfigService<OraklConfiguration, true>>(ConfigService);
+
+  const trustedOrigins = config.get('auth.trustedOrigins', {
+    infer: true,
+  });
+
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   app.enableCors({
-    origin: ['http://localhost:3000'],
+    origin: trustedOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
-
-  const config =
-    app.get<ConfigService<OraklConfiguration, true>>(ConfigService);
 
   const port = config.get('app.port', {
     infer: true,
@@ -28,4 +31,4 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 }
 
-bootstrap();
+void bootstrap();
