@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
@@ -230,18 +231,28 @@ export class CompetitionsService {
 
   async getCompetition(userId: string, competitionId: string) {
     const competition = await this.prisma.competition.findFirst({
-      where: { id: competitionId },
+      where: {
+        id: competitionId,
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
       select: {
         id: true,
         name: true,
         status: true,
         joinCode: true,
         createdAt: true,
+        gameType: true,
       },
     });
 
     if (!competition)
-      throw new BadRequestException('id is incorrect or does not exist');
+      throw new NotFoundException(
+        'Competition not found or user is not a member',
+      );
 
     return competition;
   }
