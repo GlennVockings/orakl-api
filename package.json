@@ -38,6 +38,7 @@
     "@prisma/client": "^6.15.0",
     "@thallesp/nestjs-better-auth": "^2.7.0",
     "bcrypt": "^6.0.0",
+    "better-auth": "1.6.23",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "joi": "^18.2.3",
@@ -96,7 +97,7 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "engines": {
-      "node": ">=20 <21"
+      "node": "^24.18.0"
     }
   }
 }
