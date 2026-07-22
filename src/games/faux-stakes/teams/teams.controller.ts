@@ -12,6 +12,7 @@ import { TeamsService } from './teams.service';
 import { CreateTeamsDto } from './dto/create-team.dto';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { EditTeamsDto } from './dto/edit-team.dto';
+import { GameType } from '@prisma/client';
 
 @Controller('/competitions/:competitionId/faux-stakes/teams')
 export class TeamsController {
@@ -27,7 +28,11 @@ export class TeamsController {
     @Param('competitionId') competitionId: string,
     @Body() body: CreateTeamsDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    await this.competitionAccess.requireCompetitionAdmin(
+      userId,
+      competitionId,
+      GameType.FAUX_STAKES,
+    );
     return this.teams.createTeams(competitionId, body);
   }
 
@@ -37,9 +42,10 @@ export class TeamsController {
     @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
   ) {
-    await this.competitionAccess.requireCompetitionMember(
+    await this.competitionAccess.requireGameCompetition(
       userId,
       competitionId,
+      GameType.FAUX_STAKES,
     );
     return this.teams.getTeams(competitionId);
   }
@@ -51,7 +57,11 @@ export class TeamsController {
     @Param('competitionId') competitionId: string,
     @Body() body: EditTeamsDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    await this.competitionAccess.requireCompetitionAdmin(
+      userId,
+      competitionId,
+      GameType.FAUX_STAKES,
+    );
     return this.teams.editTeam(competitionId, body);
   }
 }

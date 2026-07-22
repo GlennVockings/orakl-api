@@ -4,6 +4,7 @@ import { CompetitionAccessService } from '../../../platform/competitions/competi
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { SettleMarketDto } from './dto/settle-market.dto';
+import { GameType } from '@prisma/client';
 
 @Controller('/competitions/:competitionId/faux-stakes/markets')
 export class MarketsController {
@@ -19,7 +20,11 @@ export class MarketsController {
     @Param('competitionId') competitionId: string,
     @Body() body: CreateMarketDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    await this.competitionAccess.requireCompetitionAdmin(
+      userId,
+      competitionId,
+      GameType.FAUX_STAKES,
+    );
     return this.markets.createMarket(competitionId, body);
   }
 
@@ -29,9 +34,10 @@ export class MarketsController {
     @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
   ) {
-    await this.competitionAccess.requireCompetitionMember(
+    await this.competitionAccess.requireGameCompetition(
       userId,
       competitionId,
+      GameType.FAUX_STAKES,
     );
     return this.markets.getMarkets(competitionId);
   }
@@ -44,7 +50,11 @@ export class MarketsController {
     @Param('marketId') marketId: string,
     @Body() body: SettleMarketDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    await this.competitionAccess.requireCompetitionAdmin(
+      userId,
+      competitionId,
+      GameType.FAUX_STAKES,
+    );
     return this.markets.settleMarket(competitionId, marketId, body);
   }
 
@@ -55,7 +65,11 @@ export class MarketsController {
     @Param('competitionId') competitionId: string,
     @Param('marketId') marketId: string,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(userId, competitionId);
+    await this.competitionAccess.requireCompetitionAdmin(
+      userId,
+      competitionId,
+      GameType.FAUX_STAKES,
+    );
     return this.markets.closeMarket(competitionId, marketId);
   }
 }
