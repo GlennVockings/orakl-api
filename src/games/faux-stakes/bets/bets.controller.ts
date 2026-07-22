@@ -3,7 +3,7 @@ import { BetsService } from './bets.service';
 import { BetterAuthJwtGuard, CurrentUserId } from 'src/platform/auth';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
-import { GameType } from '@prisma/client';
+import { CompetitionMemberGuard } from 'src/platform/competitions/guards/competition-member.guard';
 
 @Controller('/competitions/:competitionId/faux-stakes/bets')
 export class BetsController {
@@ -12,47 +12,32 @@ export class BetsController {
     private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionMemberGuard)
   @Post()
   async placeBet(
     @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: CreateBetDto,
   ) {
-    await this.competitionAccess.requireGameCompetition(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.betsService.placeBet(userId, competitionId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionMemberGuard)
   @Get()
   async getUserBets(
     @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
   ) {
-    await this.competitionAccess.requireGameCompetition(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.betsService.getUserBets(userId, competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionMemberGuard)
   @Post(':betId/undo')
   async undoBet(
     @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('betId') betId: string,
   ) {
-    await this.competitionAccess.requireGameCompetition(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.betsService.undoBet(userId, competitionId, betId);
   }
 }

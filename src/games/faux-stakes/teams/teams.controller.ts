@@ -7,12 +7,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { BetterAuthJwtGuard, CurrentUserId } from '../../../platform/auth';
+import { BetterAuthJwtGuard } from '../../../platform/auth';
 import { TeamsService } from './teams.service';
 import { CreateTeamsDto } from './dto/create-team.dto';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { EditTeamsDto } from './dto/edit-team.dto';
-import { GameType } from '@prisma/client';
+import { CompetitionMemberGuard } from 'src/platform/competitions/guards/competition-member.guard';
+import { CompetitionAdminGuard } from 'src/platform/competitions/guards/competition-admin.guard';
 
 @Controller('/competitions/:competitionId/faux-stakes/teams')
 export class TeamsController {
@@ -21,47 +22,27 @@ export class TeamsController {
     private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Post()
   async createTeams(
-    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: CreateTeamsDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.teams.createTeams(competitionId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionMemberGuard)
   @Get()
-  async getTeams(
-    @CurrentUserId() userId: string,
-    @Param('competitionId') competitionId: string,
-  ) {
-    await this.competitionAccess.requireGameCompetition(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
+  async getTeams(@Param('competitionId') competitionId: string) {
     return this.teams.getTeams(competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Patch()
   async editTeam(
-    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: EditTeamsDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.teams.editTeam(competitionId, body);
   }
 }

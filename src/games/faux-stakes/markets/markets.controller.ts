@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { BetterAuthJwtGuard, CurrentUserId } from '../../../platform/auth';
+import { BetterAuthJwtGuard } from '../../../platform/auth';
 import { CompetitionAccessService } from '../../../platform/competitions/competition-access.service';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { SettleMarketDto } from './dto/settle-market.dto';
-import { GameType } from '@prisma/client';
+import { CompetitionAdminGuard } from 'src/platform/competitions/guards/competition-admin.guard';
+import { CompetitionMemberGuard } from 'src/platform/competitions/guards/competition-member.guard';
 
 @Controller('/competitions/:competitionId/faux-stakes/markets')
 export class MarketsController {
@@ -13,63 +14,37 @@ export class MarketsController {
     private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Post()
   async createMarket(
-    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Body() body: CreateMarketDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.markets.createMarket(competitionId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionMemberGuard)
   @Get()
-  async getMarkets(
-    @CurrentUserId() userId: string,
-    @Param('competitionId') competitionId: string,
-  ) {
-    await this.competitionAccess.requireGameCompetition(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
+  async getMarkets(@Param('competitionId') competitionId: string) {
     return this.markets.getMarkets(competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Post(':marketId/settle')
   async settleMarket(
-    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('marketId') marketId: string,
     @Body() body: SettleMarketDto,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.markets.settleMarket(competitionId, marketId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Post(':marketId/close')
   async closeMarket(
-    @CurrentUserId() userId: string,
     @Param('competitionId') competitionId: string,
     @Param('marketId') marketId: string,
   ) {
-    await this.competitionAccess.requireCompetitionAdmin(
-      userId,
-      competitionId,
-      GameType.FAUX_STAKES,
-    );
     return this.markets.closeMarket(competitionId, marketId);
   }
 }
