@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '../../../prisma.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import {
   BetStatus,
@@ -14,7 +14,7 @@ import {
 } from '@prisma/client';
 import { WsGateway } from '../realtime/ws.gateway';
 import { SettleMarketDto } from './dto/settle-market.dto';
-import { FauxStakesLeaderboardService } from 'src/games/faux-stakes/leaderboard/faux-stakes-leaderboard.service';
+import { FauxStakesLeaderboardService } from '../../../games/faux-stakes/leaderboard/faux-stakes-leaderboard.service';
 
 @Injectable()
 export class MarketsService {
@@ -95,7 +95,7 @@ export class MarketsService {
         data: {
           competitionId,
           name: dto.name,
-          status: 'OPEN',
+          status: MarketStatus.OPEN,
           selections: hasTeamSelections
             ? {
                 create: dto.teamSelections!.map((selection) => ({
@@ -178,11 +178,11 @@ export class MarketsService {
       );
     }
 
-    if (market.status === 'SETTLED') {
+    if (market.status === MarketStatus.SETTLED) {
       throw new ForbiddenException('Settled markets cannot be closed');
     }
 
-    if (market.status === 'CLOSED') {
+    if (market.status === MarketStatus.CLOSED) {
       throw new ForbiddenException('Market is already closed');
     }
 
