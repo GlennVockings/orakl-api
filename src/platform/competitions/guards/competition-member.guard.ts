@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   CanActivate,
   ExecutionContext,
   Injectable,
@@ -7,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CompetitionAccessService } from '../competition-access.service';
 import type { CompetitionRequest } from '../types/authenticated-request';
+import { getCompetitionId } from '../utils/get-competition-id';
 
 @Injectable()
 export class CompetitionMemberGuard implements CanActivate {
@@ -16,21 +16,12 @@ export class CompetitionMemberGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<CompetitionRequest>();
 
     const userId = request.user?.id;
-    const competitionIdParam = request.params.competitionId;
-
-    if (!competitionIdParam || Array.isArray(competitionIdParam)) {
-      throw new BadRequestException('Competition ID was not provided');
-    }
-
-    const competitionId = competitionIdParam;
 
     if (!userId) {
       throw new UnauthorizedException('Authenticated user was not found');
     }
 
-    if (!competitionId) {
-      throw new BadRequestException('Competition ID was not provided');
-    }
+    const competitionId = getCompetitionId(request);
 
     const membership = await this.competitionAccess.requireCompetitionMember(
       userId,
