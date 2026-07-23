@@ -10,7 +10,7 @@ import {
   Prisma,
   SelectionStatus,
 } from '@prisma/client';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '../../../prisma.service';
 import { CreateBetDto } from './dto/create-bet.dto';
 
 function txnSign(type: LedgerType) {
@@ -70,7 +70,7 @@ export class BetsService {
       );
     }
 
-    if (market.status !== 'OPEN') {
+    if (market.status !== MarketStatus.OPEN) {
       throw new ForbiddenException('Market is not open for betting');
     }
 
@@ -80,7 +80,7 @@ export class BetsService {
       throw new BadRequestException('Selection does not belong to this market');
     }
 
-    if (selection.status !== 'ACTIVE') {
+    if (selection.status !== SelectionStatus.ACTIVE) {
       throw new ForbiddenException('Selection is not active');
     }
 

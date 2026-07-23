@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "^24.18.0"
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
@@ -95,9 +98,6 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node",
-    "engines": {
-      "node": "^24.18.0"
-    }
+    "testEnvironment": "node"
   }
 }
