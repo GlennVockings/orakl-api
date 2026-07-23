@@ -1,5 +1,11 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { MarketStatus } from '@prisma/client';
+import {
+  BetStatus,
+  LedgerType,
+  MarketStatus,
+  Prisma,
+  SelectionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma.service';
 import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
@@ -15,6 +21,7 @@ type CompetitionUpdateArgs = {
 };
 
 describe('MarketsService', () => {
+  const fixedNow = new Date('2026-07-23T12:00:00.000Z');
   const marketFindFirst = jest.fn();
   const marketUpdate = jest.fn();
   const competitionUpdate = jest.fn<
@@ -24,6 +31,8 @@ describe('MarketsService', () => {
   const betFindMany = jest.fn();
   const selectionUpdate = jest.fn();
   const ledgerCreate = jest.fn();
+  const betUpdate = jest.fn();
+  const createSnapshot = jest.fn();
 
   const transactionClient = {
     market: {
@@ -34,7 +43,7 @@ describe('MarketsService', () => {
     },
     bet: {
       findMany: betFindMany,
-      update: jest.fn(),
+      update: betUpdate,
     },
     selection: {
       update: selectionUpdate,
@@ -57,7 +66,7 @@ describe('MarketsService', () => {
   } as unknown as PrismaService;
 
   const leaderboardService = {
-    createSnapshot: jest.fn(),
+    createSnapshot,
   } as unknown as FauxStakesLeaderboardService;
 
   const emitMarketClosed = jest.fn();
@@ -71,14 +80,20 @@ describe('MarketsService', () => {
   let service: MarketsService;
 
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(fixedNow);
     jest.clearAllMocks();
 
-    (prisma.$transaction as jest.Mock).mockImplementation(
+    transaction.mockImplementation(
       async (callback: (tx: typeof transactionClient) => Promise<unknown>) =>
         callback(transactionClient),
     );
 
     service = new MarketsService(prisma, leaderboardService, wsGateway);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('closeMarket', () => {
@@ -174,24 +189,174 @@ describe('MarketsService', () => {
   });
 
   describe('settleMarket', () => {
-    it('only allows a closed market to be settled', async () => {
-      marketFindFirst.mockResolvedValue({
+    it('settles bets, pays winners and finalises the market', async () => {
+      const winningSelectionId = 'selection-1';
+      const losingSelectionId = 'selection-2';
+
+      const winningBet = {
+        id: 'bet-1',
+        competitionId: 'competition-1',
+        userId: 'user-1',
+        selectionId: winningSelectionId,
+        stake: new Prisma.Decimal(10),
+        oddsSnapshot: new Prisma.Decimal(2.5),
+        potentialReturn: new Prisma.Decimal(25),
+        status: BetStatus.PENDING,
+        placedAt: fixedNow,
+        settledAt: null,
+      };
+
+      const losingBet = {
+        id: 'bet-2',
+        competitionId: 'competition-1',
+        userId: 'user-2',
+        selectionId: losingSelectionId,
+        stake: new Prisma.Decimal(10),
+        oddsSnapshot: new Prisma.Decimal(3),
+        potentialReturn: new Prisma.Decimal(30),
+        status: BetStatus.PENDING,
+        placedAt: fixedNow,
+        settledAt: null,
+      };
+
+      const market = {
         id: 'market-1',
         name: 'Premier League winner',
-        status: MarketStatus.OPEN,
-        selections: [],
+        status: MarketStatus.CLOSED,
+        selections: [
+          {
+            id: winningSelectionId,
+          },
+          {
+            id: losingSelectionId,
+          },
+        ],
+      };
+
+      marketFindFirst.mockResolvedValue(market);
+
+      betFindMany.mockResolvedValue([winningBet, losingBet]);
+
+      betUpdate.mockResolvedValue({
+        id: 'updated-bet',
       });
 
-      await expect(
-        service.settleMarket('competition-1', 'market-1', {
-          winningSelectionId: 'selection-1',
-        }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ledgerCreate.mockResolvedValue({
+        id: 'ledger-1',
+      });
 
-      expect(transaction).not.toHaveBeenCalled();
+      selectionUpdate.mockResolvedValue({
+        id: 'updated-selection',
+      });
+
+      marketUpdate.mockResolvedValue({
+        id: 'market-1',
+        status: MarketStatus.SETTLED,
+      });
+
+      competitionUpdate.mockResolvedValue({
+        id: 'competition-1',
+      });
+
+      createSnapshot.mockResolvedValue(undefined);
+
+      const result = await service.settleMarket('competition-1', 'market-1', {
+        winningSelectionId,
+      });
+
+      expect(betFindMany).toHaveBeenCalledWith({
+        where: {
+          competitionId: 'competition-1',
+          selectionId: {
+            in: [winningSelectionId, losingSelectionId],
+          },
+          status: BetStatus.PENDING,
+        },
+      });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+
+      expect(betUpdate).toHaveBeenNthCalledWith(1, {
+        where: {
+          id: 'bet-1',
+        },
+        data: {
+          status: BetStatus.WON,
+          settledAt: fixedNow,
+        },
+      });
+
+      expect(betUpdate).toHaveBeenNthCalledWith(2, {
+        where: {
+          id: 'bet-2',
+        },
+        data: {
+          status: BetStatus.LOST,
+          settledAt: fixedNow,
+        },
+      });
+
+      expect(ledgerCreate).toHaveBeenCalledTimes(1);
+
+      expect(ledgerCreate).toHaveBeenCalledWith({
+        data: {
+          competitionId: 'competition-1',
+          userId: 'user-1',
+          type: LedgerType.PAYOUT,
+          amount: winningBet.potentialReturn,
+          betId: 'bet-1',
+          marketId: 'market-1',
+        },
+      });
+
+      expect(selectionUpdate).toHaveBeenNthCalledWith(1, {
+        where: {
+          id: winningSelectionId,
+        },
+        data: {
+          status: SelectionStatus.WINNER,
+        },
+      });
+
+      expect(selectionUpdate).toHaveBeenNthCalledWith(2, {
+        where: {
+          id: losingSelectionId,
+        },
+        data: {
+          status: SelectionStatus.LOSER,
+        },
+      });
+
+      expect(marketUpdate).toHaveBeenCalledWith({
+        where: {
+          id: 'market-1',
+        },
+        data: {
+          status: MarketStatus.SETTLED,
+        },
+      });
+
+      expect(competitionUpdate).toHaveBeenCalledWith({
+        where: {
+          id: 'competition-1',
+        },
+        data: {
+          lastActivityAt: fixedNow,
+        },
+      });
+
+      expect(createSnapshot).toHaveBeenCalledWith('competition-1', 'market-1');
+
+      expect(emitMarketSettled).toHaveBeenCalledWith('competition-1', {
+        id: 'market-1',
+        name: 'Premier League winner',
+        winningSelectionId,
+      });
+
+      expect(result).toEqual(market);
     });
 
-    it('rejects a winning selection from another market', async () => {
+    it('rejects settlement when the market has no pending bets', async () => {
       marketFindFirst.mockResolvedValue({
         id: 'market-1',
         name: 'Premier League winner',
@@ -206,13 +371,19 @@ describe('MarketsService', () => {
         ],
       });
 
+      betFindMany.mockResolvedValue([]);
+
       await expect(
         service.settleMarket('competition-1', 'market-1', {
-          winningSelectionId: 'selection-from-another-market',
+          winningSelectionId: 'selection-1',
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrow('No bets made against this market');
 
       expect(transaction).not.toHaveBeenCalled();
+      expect(betUpdate).not.toHaveBeenCalled();
+      expect(marketUpdate).not.toHaveBeenCalled();
+      expect(createSnapshot).not.toHaveBeenCalled();
+      expect(emitMarketSettled).not.toHaveBeenCalled();
     });
   });
 });
