@@ -203,6 +203,7 @@ model Bet {
   status          BetStatus              @default(PENDING)
   placedAt        DateTime               @default(now())
   settledAt       DateTime?
+  idempotencyKey  String?                @unique
   ledgerTxns      CompetitionLedgerTxn[]
 
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)

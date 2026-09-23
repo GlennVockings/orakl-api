@@ -1,4 +1,4 @@
-import { IsNumber, IsString, Min } from 'class-validator';
+import { IsNumber, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreateBetDto {
   @IsString()
@@ -10,4 +10,7 @@ export class CreateBetDto {
   @IsNumber()
   @Min(1)
   stake!: number;
+
+  @IsUUID()
+  idempotencyKey!: string;
 }
