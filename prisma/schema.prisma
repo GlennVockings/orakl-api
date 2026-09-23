@@ -27,6 +27,7 @@ enum MemberRole {
 }
 
 enum MarketStatus {
+  DRAFT
   OPEN
   CLOSED
   SETTLED

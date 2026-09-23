@@ -157,6 +157,37 @@ export class MarketsService {
     });
   }
 
+  async openMarket(competitionId: string, marketId: string) {
+    const market = await this.prisma.market.findFirst({
+      where: { id: marketId, competitionId },
+      select: { id: true },
+    });
+
+    if (!market) {
+      throw new BadRequestException(
+        'Market does not exist for this competition',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const result = await tx.market.updateMany({
+        where: { id: marketId, competitionId, status: MarketStatus.DRAFT },
+        data: { status: MarketStatus.OPEN },
+      });
+
+      if (result.count !== 1) {
+        throw new ForbiddenException('Only draft markets can be opened');
+      }
+
+      await tx.competition.update({
+        where: { id: competitionId },
+        data: { lastActivityAt: new Date() },
+      });
+    });
+
+    return { ok: true, marketId, status: MarketStatus.OPEN };
+  }
+
   async closeMarket(competitionId: string, marketId: string) {
     const now = new Date();
 
@@ -187,10 +218,14 @@ export class MarketsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.market.update({
-        where: { id: marketId },
+      const result = await tx.market.updateMany({
+        where: { id: marketId, competitionId, status: MarketStatus.OPEN },
         data: { status: MarketStatus.CLOSED },
       });
+
+      if (result.count !== 1) {
+        throw new ForbiddenException('Only open markets can be closed');
+      }
 
       await tx.competition.update({
         where: { id: competitionId },
@@ -267,6 +302,15 @@ export class MarketsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const result = await tx.market.updateMany({
+        where: { id: marketId, competitionId, status: MarketStatus.CLOSED },
+        data: { status: MarketStatus.SETTLED },
+      });
+
+      if (result.count !== 1) {
+        throw new ForbiddenException('Only closed markets can be settled');
+      }
+
       for (const bet of bets) {
         const hasWon = bet.selectionId === dto.winningSelectionId;
 
@@ -307,13 +351,6 @@ export class MarketsService {
           },
         });
       }
-
-      await tx.market.update({
-        where: { id: marketId },
-        data: {
-          status: MarketStatus.SETTLED,
-        },
-      });
 
       await tx.competition.update({
         where: { id: competitionId },

@@ -40,6 +40,15 @@ export class MarketsController {
   }
 
   @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
+  @Post(':marketId/open')
+  async openMarket(
+    @Param('competitionId') competitionId: string,
+    @Param('marketId') marketId: string,
+  ) {
+    return this.markets.openMarket(competitionId, marketId);
+  }
+
+  @UseGuards(BetterAuthJwtGuard, CompetitionAdminGuard)
   @Post(':marketId/close')
   async closeMarket(
     @Param('competitionId') competitionId: string,
