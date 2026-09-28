@@ -63,7 +63,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   // Full version auth:
-  passwordHash String? // null allowed for prototype-only presets if you want
+  passwordHash String?
 
   // Relationships
   memberships          CompetitionMember[]
@@ -109,8 +109,8 @@ model Competition {
   gameType    GameType @default(FAUX_STAKES)
 
   // Helpful flags
-  isDemo     Boolean @default(false) // for public demo mode later (still join-code controlled if you want)
-  isTemplate Boolean @default(false) // if you ever want “copy this competition setup”
+  isDemo     Boolean @default(false)
+  isTemplate Boolean @default(false)
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -162,7 +162,7 @@ model Market {
   id                   String                 @id @default(cuid())
   competitionId        String
   name                 String
-  status               MarketStatus           @default(OPEN)
+  status               MarketStatus           @default(DRAFT)
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   ledgerTxns           CompetitionLedgerTxn[]
@@ -232,6 +232,7 @@ model CompetitionLedgerTxn {
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([betId, type])
   @@index([competitionId])
   @@index([userId, competitionId])
   @@index([betId])

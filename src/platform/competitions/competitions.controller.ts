@@ -55,6 +55,20 @@ export class CompetitionsController {
   }
 
   @UseGuards(BetterAuthJwtGuard)
+  @Get(':competitionId/members')
+  async getMembers(
+    @CurrentUserId() userId: string,
+    @Param('competitionId') competitionId: string,
+  ) {
+    await this.competitionAccess.requireCompetitionMember(
+      userId,
+      competitionId,
+    );
+
+    return this.competitions.getMembers(competitionId);
+  }
+
+  @UseGuards(BetterAuthJwtGuard)
   @Patch(':competitionId/seen')
   async markSeen(
     @CurrentUserId() userId: string,

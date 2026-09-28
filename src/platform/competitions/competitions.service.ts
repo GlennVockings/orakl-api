@@ -20,9 +20,9 @@ export class CompetitionsService {
 
   private generateJoinCode(length = 6): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    // Removed: I, O, 0, 1 (to avoid confusion)
 
     let result = '';
+
     for (let i = 0; i < length; i++) {
       const rand = Math.floor(Math.random() * chars.length);
       result += chars[rand];
@@ -39,7 +39,9 @@ export class CompetitionsService {
         where: { joinCode: code },
       });
 
-      if (!exists) return code;
+      if (!exists) {
+        return code;
+      }
     }
 
     throw new Error('Failed to generate unique join code');
@@ -72,6 +74,7 @@ export class CompetitionsService {
               members: true,
             },
           });
+
           return createdCompetition;
         });
 
@@ -88,6 +91,7 @@ export class CompetitionsService {
         if (err.code === 'P2002') {
           continue;
         }
+
         throw err;
       }
     }
@@ -123,7 +127,9 @@ export class CompetitionsService {
       },
     });
 
-    if (competitions.length === 0) return [];
+    if (competitions.length === 0) {
+      return [];
+    }
 
     return Promise.all(
       competitions.map(async (competition) => {
@@ -132,13 +138,12 @@ export class CompetitionsService {
         const hasUpdates = competition.lastActivityAt > lastSeenAt;
 
         const engine = this.gameEngineRegistry.get(competition.gameType);
+
         const gameSummary = (await engine.getCompetitionSummary?.({
           userId,
-
           competitionId: competition.id,
         })) ?? {
           summary: {},
-
           membership: {},
         };
 
@@ -147,6 +152,7 @@ export class CompetitionsService {
           name: competition.name,
           status: competition.status,
           joinCode: competition.joinCode,
+          gameType: competition.gameType,
           lastActivityAt: competition.lastActivityAt,
           ...gameSummary.summary,
 
@@ -178,18 +184,23 @@ export class CompetitionsService {
       },
     });
 
-    if (!competition)
+    if (!competition) {
       throw new BadRequestException('Join code is incorrect or does not exist');
+    }
 
-    if (competition.status === 'CLOSED')
+    if (competition.status === 'CLOSED') {
       throw new ForbiddenException('This competition is closed');
+    }
 
     const now = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
       const membership = await tx.competitionMember.upsert({
         where: {
-          competitionId_userId: { competitionId: competition.id, userId },
+          competitionId_userId: {
+            competitionId: competition.id,
+            userId,
+          },
         },
         update: {
           lastSeenAt: now,
@@ -207,7 +218,10 @@ export class CompetitionsService {
         data: { lastActivityAt: now },
       });
 
-      return { competition, membership };
+      return {
+        competition,
+        membership,
+      };
     });
 
     const engine = this.gameEngineRegistry.get(competition.gameType);
@@ -222,10 +236,19 @@ export class CompetitionsService {
 
   async markSeen(userId: string, competitionId: string) {
     const now = new Date();
+
     await this.prisma.competitionMember.update({
-      where: { competitionId_userId: { competitionId, userId } },
-      data: { lastSeenAt: now },
+      where: {
+        competitionId_userId: {
+          competitionId,
+          userId,
+        },
+      },
+      data: {
+        lastSeenAt: now,
+      },
     });
+
     return { ok: true };
   }
 
@@ -249,12 +272,37 @@ export class CompetitionsService {
       },
     });
 
-    if (!competition)
+    if (!competition) {
       throw new NotFoundException(
         'Competition not found or user is not a member',
       );
+    }
 
     return competition;
+  }
+
+  async getMembers(competitionId: string) {
+    return this.prisma.competitionMember.findMany({
+      where: {
+        competitionId,
+      },
+      orderBy: [
+        {
+          joinedAt: 'asc',
+        },
+      ],
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        joinedAt: true,
+        user: {
+          select: {
+            displayName: true,
+          },
+        },
+      },
+    });
   }
 
   async deleteCompetition(userId: string, competitionId: string) {
@@ -291,7 +339,9 @@ export class CompetitionsService {
     }
 
     await this.prisma.competition.delete({
-      where: { id: competitionId },
+      where: {
+        id: competitionId,
+      },
     });
 
     return {
@@ -328,6 +378,7 @@ export class CompetitionsService {
     }
 
     const engine = this.gameEngineRegistry.get(membership.competition.gameType);
+
     const playerState =
       (await engine.getPlayerState?.({
         userId,

@@ -27,8 +27,14 @@ export class BetsService {
     userId: string,
   ) {
     const txns = await tx.competitionLedgerTxn.findMany({
-      where: { competitionId, userId },
-      select: { type: true, amount: true },
+      where: {
+        competitionId,
+        userId,
+      },
+      select: {
+        type: true,
+        amount: true,
+      },
     });
 
     return txns.reduce(
@@ -37,24 +43,52 @@ export class BetsService {
     );
   }
 
+  private async lockPlayerWallet(
+    tx: Prisma.TransactionClient,
+    competitionId: string,
+    userId: string,
+  ) {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "CompetitionMember"
+      WHERE "competitionId" = ${competitionId}
+        AND "userId" = ${userId}
+      FOR UPDATE
+    `);
+
+    if (rows.length !== 1) {
+      throw new ForbiddenException('You are not a member of this competition');
+    }
+  }
+
   private async getExistingBetResult(
     idempotencyKey: string,
     userId: string,
     competitionId: string,
   ) {
     const bet = await this.prisma.bet.findUnique({
-      where: { idempotencyKey },
+      where: {
+        idempotencyKey,
+      },
     });
 
-    if (!bet) return null;
+    if (!bet) {
+      return null;
+    }
 
     if (bet.userId !== userId || bet.competitionId !== competitionId) {
       throw new ForbiddenException('Idempotency key is already in use');
     }
 
     const txns = await this.prisma.competitionLedgerTxn.findMany({
-      where: { competitionId, userId },
-      select: { type: true, amount: true },
+      where: {
+        competitionId,
+        userId,
+      },
+      select: {
+        type: true,
+        amount: true,
+      },
     });
 
     const currentBalance = txns.reduce(
@@ -62,7 +96,10 @@ export class BetsService {
       0,
     );
 
-    return { bet, currentBalance };
+    return {
+      bet,
+      currentBalance,
+    };
   }
 
   async placeBet(userId: string, competitionId: string, dto: CreateBetDto) {
@@ -71,27 +108,45 @@ export class BetsService {
       userId,
       competitionId,
     );
-    if (existing) return existing;
+
+    if (existing) {
+      return existing;
+    }
 
     const now = new Date();
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // This conditional write serialises against the host closing the market.
-        // If close wins the row lock first, this update affects zero rows.
+        /*
+         * This conditional write does two jobs:
+         *
+         * 1. It proves the market is still OPEN at the point the stake
+         *    starts being accepted.
+         * 2. PostgreSQL takes a row lock on the market, serialising this
+         *    operation against closeMarket().
+         *
+         * If closing wins the row lock first, this affects zero rows.
+         */
         const openMarket = await tx.market.updateMany({
           where: {
             id: dto.marketId,
             competitionId,
             status: MarketStatus.OPEN,
           },
-          data: { updatedAt: now },
+          data: {
+            updatedAt: now,
+          },
         });
 
         if (openMarket.count !== 1) {
           const market = await tx.market.findFirst({
-            where: { id: dto.marketId, competitionId },
-            select: { id: true },
+            where: {
+              id: dto.marketId,
+              competitionId,
+            },
+            select: {
+              id: true,
+            },
           });
 
           if (!market) {
@@ -102,6 +157,18 @@ export class BetsService {
 
           throw new ForbiddenException('Market is not open for betting');
         }
+
+        /*
+         * Market locking protects the market lifecycle, but it does not
+         * protect a player's balance across DIFFERENT markets.
+         *
+         * The CompetitionMember row is unique for competition + user, so
+         * we use it as the per-player wallet lock.
+         *
+         * Two simultaneous stakes from the same player must therefore
+         * calculate their balances one after the other.
+         */
+        await this.lockPlayerWallet(tx, competitionId, userId);
 
         const selection = await tx.selection.findFirst({
           where: {
@@ -149,6 +216,13 @@ export class BetsService {
           },
         });
 
+        /*
+         * The stake and its debit live in the same transaction.
+         *
+         * We therefore cannot end up with:
+         * - a Bet without its DEBIT, or
+         * - a DEBIT without its Bet.
+         */
         await tx.competitionLedgerTxn.create({
           data: {
             competitionId,
@@ -161,8 +235,12 @@ export class BetsService {
         });
 
         await tx.competition.update({
-          where: { id: competitionId },
-          data: { lastActivityAt: now },
+          where: {
+            id: competitionId,
+          },
+          data: {
+            lastActivityAt: now,
+          },
         });
 
         return {
@@ -171,6 +249,14 @@ export class BetsService {
         };
       });
     } catch (error) {
+      /*
+       * A double-submit can arrive twice before either request has seen
+       * the other's Bet.
+       *
+       * The database unique constraint on idempotencyKey is the final
+       * authority. P2002 means another request won that race, so return
+       * the already-created result instead of charging twice.
+       */
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
@@ -180,23 +266,37 @@ export class BetsService {
           userId,
           competitionId,
         );
-        if (duplicate) return duplicate;
+
+        if (duplicate) {
+          return duplicate;
+        }
       }
+
       throw error;
     }
   }
 
   async getUserBets(userId: string, competitionId: string) {
     const bets = await this.prisma.bet.findMany({
-      where: { competitionId, userId },
-      orderBy: { placedAt: 'desc' },
+      where: {
+        competitionId,
+        userId,
+      },
+      orderBy: {
+        placedAt: 'desc',
+      },
       include: {
         selection: {
           select: {
             id: true,
             label: true,
             status: true,
-            team: { select: { id: true, name: true } },
+            team: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             market: {
               select: {
                 id: true,
@@ -239,17 +339,20 @@ export class BetsService {
         settledAt: bet.settledAt,
         status: bet.status,
         isSettled: !!bet.settledAt,
+
         market: {
           id: bet.selection.market.id,
           name: bet.selection.market.name,
           status: bet.selection.market.status,
         },
+
         selection: {
           id: bet.selection.id,
           label: bet.selection.label,
           team: bet.selection.team,
           status: bet.selection.status,
         },
+
         winningSelection: winningSelection
           ? {
               id: winningSelection.id,
@@ -264,16 +367,30 @@ export class BetsService {
 
   async getGameBets(competitionId: string) {
     const bets = await this.prisma.bet.findMany({
-      where: { competitionId },
-      orderBy: { placedAt: 'desc' },
+      where: {
+        competitionId,
+      },
+      orderBy: {
+        placedAt: 'desc',
+      },
       include: {
-        user: { select: { id: true, displayName: true } },
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+          },
+        },
         selection: {
           select: {
             id: true,
             label: true,
             status: true,
-            team: { select: { id: true, name: true } },
+            team: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             market: {
               select: {
                 id: true,
@@ -316,17 +433,20 @@ export class BetsService {
         settledAt: bet.settledAt,
         status: bet.status,
         isSettled: !!bet.settledAt,
+
         market: {
           id: bet.selection.market.id,
           name: bet.selection.market.name,
           status: bet.selection.market.status,
         },
+
         selection: {
           id: bet.selection.id,
           label: bet.selection.label,
           team: bet.selection.team,
           status: bet.selection.status,
         },
+
         winningSelection: winningSelection
           ? {
               id: winningSelection.id,
@@ -335,7 +455,10 @@ export class BetsService {
               status: winningSelection.status,
             }
           : null,
-        user: { ...bet.user },
+
+        user: {
+          ...bet.user,
+        },
       };
     });
   }
@@ -343,32 +466,100 @@ export class BetsService {
   async undoBet(userId: string, competitionId: string, betId: string) {
     const now = new Date();
 
-    const bet = await this.prisma.bet.findFirst({
-      where: { competitionId, id: betId, userId },
-      include: {
-        selection: {
-          include: {
-            market: { select: { id: true, status: true } },
+    return this.prisma.$transaction(async (tx) => {
+      /*
+       * Find enough information to identify the market first.
+       *
+       * We deliberately do not trust this first read as our final OPEN
+       * check. Its purpose is only to locate the market row we need to
+       * lock.
+       */
+      const candidateBet = await tx.bet.findFirst({
+        where: {
+          competitionId,
+          id: betId,
+          userId,
+        },
+        select: {
+          id: true,
+          selection: {
+            select: {
+              marketId: true,
+            },
           },
         },
-      },
-    });
-
-    if (!bet) throw new BadRequestException('Bet does not exist');
-    if (bet.status !== BetStatus.PENDING) {
-      throw new BadRequestException('Bet is not pending');
-    }
-    if (bet.selection.market.status !== MarketStatus.OPEN) {
-      throw new BadRequestException(
-        'Market has been closed or settled, unable to undo',
-      );
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.bet.update({
-        where: { id: betId },
-        data: { status: BetStatus.VOID, settledAt: now },
       });
+
+      if (!candidateBet) {
+        throw new BadRequestException('Bet does not exist');
+      }
+
+      /*
+       * Use the same market-row locking strategy as placeBet().
+       *
+       * If closeMarket() wins first, the market is CLOSED and this update
+       * affects zero rows.
+       *
+       * If undo wins first, closeMarket() waits until the refund commits.
+       */
+      const openMarket = await tx.market.updateMany({
+        where: {
+          id: candidateBet.selection.marketId,
+          competitionId,
+          status: MarketStatus.OPEN,
+        },
+        data: {
+          updatedAt: now,
+        },
+      });
+
+      if (openMarket.count !== 1) {
+        throw new BadRequestException(
+          'Market has been closed or settled, unable to undo',
+        );
+      }
+
+      /*
+       * Re-read the Bet after obtaining the market lock.
+       *
+       * This means our decision is based on state protected by the same
+       * transaction that performs the refund.
+       */
+      const bet = await tx.bet.findFirst({
+        where: {
+          id: betId,
+          competitionId,
+          userId,
+          status: BetStatus.PENDING,
+        },
+        include: {
+          selection: {
+            select: {
+              marketId: true,
+            },
+          },
+        },
+      });
+
+      if (!bet) {
+        throw new BadRequestException('Bet is not pending');
+      }
+
+      const updated = await tx.bet.updateMany({
+        where: {
+          id: bet.id,
+          status: BetStatus.PENDING,
+        },
+        data: {
+          status: BetStatus.VOID,
+          settledAt: now,
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new BadRequestException('Bet is no longer pending');
+      }
+
       await tx.competitionLedgerTxn.create({
         data: {
           competitionId,
@@ -379,8 +570,20 @@ export class BetsService {
           marketId: bet.selection.marketId,
         },
       });
-    });
 
-    return { ok: true, betId };
+      await tx.competition.update({
+        where: {
+          id: competitionId,
+        },
+        data: {
+          lastActivityAt: now,
+        },
+      });
+
+      return {
+        ok: true,
+        betId,
+      };
+    });
   }
 }
