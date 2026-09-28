@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import {
   BetStatus,
@@ -19,6 +20,8 @@ import { SettleMarketDto } from './dto/settle-market.dto';
 
 @Injectable()
 export class MarketsService {
+  private readonly logger = new Logger(MarketsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaderboardService: FauxStakesLeaderboardService,
@@ -40,10 +43,10 @@ export class MarketsService {
     }
 
     const hasTeamSelections =
-      dto.teamSelections && dto.teamSelections.length > 0;
+      dto.teamSelections !== undefined && dto.teamSelections.length > 0;
 
     const hasLabelSelections =
-      dto.labelSelections && dto.labelSelections.length > 0;
+      dto.labelSelections !== undefined && dto.labelSelections.length > 0;
 
     if (!hasTeamSelections && !hasLabelSelections) {
       throw new BadRequestException(
@@ -97,10 +100,6 @@ export class MarketsService {
           selection.label.trim(),
         );
 
-        if (labels.some((label) => label.length === 0)) {
-          throw new BadRequestException('Market outcomes cannot be empty');
-        }
-
         const uniqueLabels = new Set(
           labels.map((label) => label.toLowerCase()),
         );
@@ -112,14 +111,6 @@ export class MarketsService {
         }
       }
 
-      /*
-       * Markets are deliberately created as DRAFT.
-       *
-       * Competition status is not the gameplay gate. Each market owns its
-       * own lifecycle:
-       *
-       * DRAFT -> OPEN -> CLOSED -> SETTLED
-       */
       const createdMarket = await tx.market.create({
         data: {
           competitionId,
@@ -140,6 +131,7 @@ export class MarketsService {
                 })),
               },
         },
+
         include: {
           selections: {
             include: {
@@ -161,10 +153,6 @@ export class MarketsService {
       return createdMarket;
     });
 
-    /*
-     * WebSocket events are external side effects, so they happen after
-     * the database transaction has successfully committed.
-     */
     this.wsGateway.emitMarketCreated(competitionId, {
       name: market.name,
     });
@@ -186,19 +174,15 @@ export class MarketsService {
       throw new BadRequestException('Competition does not exist');
     }
 
-    /*
-     * Notice that we do NOT include bets here.
-     *
-     * Before resolution, members may see markets and selections but not
-     * other players' selections, amounts, counts or aggregate stake data.
-     */
     return this.prisma.market.findMany({
       where: {
         competitionId,
       },
+
       orderBy: {
         createdAt: 'asc',
       },
+
       include: {
         selections: {
           include: {
@@ -229,19 +213,13 @@ export class MarketsService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      /*
-       * Compare-and-swap:
-       *
-       * Only DRAFT may become OPEN.
-       *
-       * Two simultaneous Open requests cannot both succeed.
-       */
       const result = await tx.market.updateMany({
         where: {
           id: marketId,
           competitionId,
           status: MarketStatus.DRAFT,
         },
+
         data: {
           status: MarketStatus.OPEN,
         },
@@ -289,22 +267,13 @@ export class MarketsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      /*
-       * This update competes for the same Market row lock used by
-       * placeBet() and undoBet().
-       *
-       * Therefore there is a definite ordering:
-       *
-       * stake/undo commits first -> then market closes
-       * OR
-       * market closes first -> stake/undo is rejected
-       */
       const result = await tx.market.updateMany({
         where: {
           id: marketId,
           competitionId,
           status: MarketStatus.OPEN,
         },
+
         data: {
           status: MarketStatus.CLOSED,
         },
@@ -348,6 +317,7 @@ export class MarketsService {
         id: marketId,
         competitionId,
       },
+
       select: {
         id: true,
         name: true,
@@ -360,19 +330,21 @@ export class MarketsService {
       );
     }
 
+    /*
+     * Everything above this boundary may fail normally.
+     *
+     * Everything inside this transaction is authoritative settlement
+     * state. If any part fails, PostgreSQL rolls the entire settlement
+     * back.
+     */
     const settled = await this.prisma.$transaction(async (tx) => {
-      /*
-       * Claim the CLOSED -> SETTLED transition first.
-       *
-       * This is the settlement mutex. Only one request can successfully
-       * claim a CLOSED market.
-       */
       const claimed = await tx.market.updateMany({
         where: {
           id: marketId,
           competitionId,
           status: MarketStatus.CLOSED,
         },
+
         data: {
           status: MarketStatus.SETTLED,
         },
@@ -382,14 +354,11 @@ export class MarketsService {
         throw new ForbiddenException('Only closed markets can be resolved');
       }
 
-      /*
-       * Everything used to determine the result is now loaded inside the
-       * transaction after we own the settlement transition.
-       */
       const selections = await tx.selection.findMany({
         where: {
           marketId,
         },
+
         select: {
           id: true,
         },
@@ -410,9 +379,11 @@ export class MarketsService {
       const bets = await tx.bet.findMany({
         where: {
           competitionId,
+
           selectionId: {
             in: selectionIds,
           },
+
           status: BetStatus.PENDING,
         },
       });
@@ -424,19 +395,15 @@ export class MarketsService {
       for (const bet of bets) {
         const hasWon = bet.selectionId === dto.winningSelectionId;
 
-        /*
-         * Include PENDING in the write condition.
-         *
-         * This is another compare-and-swap: settlement is only allowed
-         * to consume a bet that is still pending.
-         */
         const updatedBet = await tx.bet.updateMany({
           where: {
             id: bet.id,
             status: BetStatus.PENDING,
           },
+
           data: {
             status: hasWon ? BetStatus.WON : BetStatus.LOST,
+
             settledAt: now,
           },
         });
@@ -452,8 +419,11 @@ export class MarketsService {
             data: {
               competitionId,
               userId: bet.userId,
+
               type: LedgerType.PAYOUT,
+
               amount: bet.potentialReturn,
+
               betId: bet.id,
               marketId,
             },
@@ -461,16 +431,11 @@ export class MarketsService {
         }
       }
 
-      /*
-       * First make every selection a loser, then promote the winner.
-       *
-       * This is both simpler and cheaper than issuing one UPDATE per
-       * selection.
-       */
       await tx.selection.updateMany({
         where: {
           marketId,
         },
+
         data: {
           status: SelectionStatus.LOSER,
         },
@@ -480,6 +445,7 @@ export class MarketsService {
         where: {
           id: dto.winningSelectionId,
         },
+
         data: {
           status: SelectionStatus.WINNER,
         },
@@ -489,6 +455,7 @@ export class MarketsService {
         where: {
           id: competitionId,
         },
+
         data: {
           lastActivityAt: now,
         },
@@ -503,19 +470,36 @@ export class MarketsService {
     });
 
     /*
-     * The actual game settlement has committed before these secondary
-     * effects run.
+     * IMPORTANT:
      *
-     * WebSocket delivery is not allowed to determine whether players
-     * receive their payout.
+     * From this point onward settlement has COMMITTED.
+     *
+     * Snapshot generation and realtime delivery are derived effects.
+     * They are not allowed to turn successful settlement into an HTTP
+     * failure.
      */
-    await this.leaderboardService.createSnapshot(competitionId, marketId);
 
-    this.wsGateway.emitMarketSettled(competitionId, {
-      id: marketId,
-      name: market.name,
-      winningSelectionId: dto.winningSelectionId,
-    });
+    try {
+      await this.leaderboardService.createSnapshot(competitionId, marketId);
+    } catch (error) {
+      this.logger.error(
+        `Settlement committed but leaderboard snapshot failed for market ${marketId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+
+    try {
+      this.wsGateway.emitMarketSettled(competitionId, {
+        id: marketId,
+        name: market.name,
+        winningSelectionId: dto.winningSelectionId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Settlement committed but realtime notification failed for market ${marketId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     return settled;
   }

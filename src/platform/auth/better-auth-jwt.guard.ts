@@ -4,15 +4,12 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { Request } from 'express';
-import type { OraklConfiguration } from '../../config/configuration';
 import type { AuthenticatedRequest } from './auth-request';
-import { mapJwtPayloadToUser } from './map-jwt-payload-to-user';
+import { JwtVerifierService } from './jwt-verifier.service';
 
-function getBearerToken(req: Request): string | null {
-  const authHeader = req.header('authorization');
+function getBearerToken(request: Request): string | null {
+  const authHeader = request.header('authorization');
 
   if (!authHeader) {
     return null;
@@ -29,15 +26,7 @@ function getBearerToken(req: Request): string | null {
 
 @Injectable()
 export class BetterAuthJwtGuard implements CanActivate {
-  private readonly jwks: JWTVerifyGetKey;
-
-  constructor(config: ConfigService<OraklConfiguration, true>) {
-    const jwksUrl = config.get('auth.jwksUrl', {
-      infer: true,
-    });
-
-    this.jwks = createRemoteJWKSet(new URL(jwksUrl));
-  }
+  constructor(private readonly jwtVerifier: JwtVerifierService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -48,18 +37,8 @@ export class BetterAuthJwtGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    try {
-      const { payload } = await jwtVerify(token, this.jwks);
+    request.user = await this.jwtVerifier.verify(token);
 
-      request.user = mapJwtPayloadToUser(payload);
-
-      return true;
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-
-      throw new UnauthorizedException('Invalid token');
-    }
+    return true;
   }
 }

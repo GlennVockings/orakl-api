@@ -1,8 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
-import { CreateTeamsDto } from './dto/create-team.dto';
 import { WsGateway } from '../realtime/ws.gateway';
+import { CreateTeamsDto } from './dto/create-team.dto';
 import { EditTeamsDto } from './dto/edit-team.dto';
+
+function normalizeTeamName(name: string): string {
+  return name.trim().toLowerCase();
+}
 
 @Injectable()
 export class TeamsService {
@@ -13,38 +18,46 @@ export class TeamsService {
 
   async createTeams(competitionId: string, dto: CreateTeamsDto) {
     const competition = await this.prisma.competition.findUnique({
-      where: { id: competitionId },
-      select: { id: true },
+      where: {
+        id: competitionId,
+      },
+
+      select: {
+        id: true,
+      },
     });
 
     if (!competition) {
       throw new BadRequestException('Competition does not exist');
     }
 
-    const names = dto.names
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0);
+    const names = dto.names.map((name) => name.trim());
 
-    if (names.length === 0) {
-      throw new BadRequestException('At least one valid team name is required');
-    }
+    const normalizedNames = names.map(normalizeTeamName);
 
-    // Check for duplicates in request itself
-    const uniqueNames = new Set(names.map((name) => name.toLowerCase()));
-    if (uniqueNames.size !== names.length) {
+    if (new Set(normalizedNames).size !== normalizedNames.length) {
       throw new BadRequestException('Duplicate team names in request');
     }
 
     try {
       await this.prisma.team.createMany({
-        data: names.map((name) => ({
+        data: names.map((name, index) => ({
           competitionId,
           name,
+          normalizedName: normalizedNames[index],
         })),
-        skipDuplicates: true,
       });
-    } catch {
-      throw new BadRequestException('Failed to create teams');
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'One or more teams already exist in this competition',
+        );
+      }
+
+      throw error;
     }
 
     this.wsGateway.emitTeamCreated(competitionId, {
@@ -53,15 +66,25 @@ export class TeamsService {
     });
 
     return this.prisma.team.findMany({
-      where: { competitionId },
-      orderBy: { name: 'asc' },
+      where: {
+        competitionId,
+      },
+
+      orderBy: {
+        name: 'asc',
+      },
     });
   }
 
   async getTeams(competitionId: string) {
     const competition = await this.prisma.competition.findUnique({
-      where: { id: competitionId },
-      select: { id: true, members: true },
+      where: {
+        id: competitionId,
+      },
+
+      select: {
+        id: true,
+      },
     });
 
     if (!competition) {
@@ -69,22 +92,56 @@ export class TeamsService {
     }
 
     return this.prisma.team.findMany({
-      where: { competitionId },
-      orderBy: { name: 'asc' },
+      where: {
+        competitionId,
+      },
+
+      orderBy: {
+        name: 'asc',
+      },
     });
   }
 
   async editTeam(competitionId: string, dto: EditTeamsDto) {
-    const team = await this.prisma.team.update({
-      where: {
-        competitionId,
-        id: dto.teamId,
-      },
-      data: {
-        name: dto.newName,
-      },
-    });
+    const name = dto.newName.trim();
 
-    return team;
+    if (!name) {
+      throw new BadRequestException('Team name cannot be empty');
+    }
+
+    try {
+      const updated = await this.prisma.team.updateMany({
+        where: {
+          id: dto.teamId,
+          competitionId,
+        },
+
+        data: {
+          name,
+          normalizedName: normalizeTeamName(name),
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new BadRequestException(
+          'Team does not exist for this competition',
+        );
+      }
+
+      return this.prisma.team.findUnique({
+        where: {
+          id: dto.teamId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('A team with this name already exists');
+      }
+
+      throw error;
+    }
   }
 }
