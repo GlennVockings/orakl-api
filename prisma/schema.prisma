@@ -1,4 +1,3 @@
-// ---------- Prisma config ----------
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -8,7 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ---------- Enums ----------
 enum GameType {
   FAUX_STAKES
   PREDICTOR
@@ -62,18 +60,14 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Full version auth:
   passwordHash String?
 
-  // Relationships
   memberships          CompetitionMember[]
   competitionsCreated  Competition[]          @relation("CompetitionsCreatedBy")
   bets                 Bet[]
   ledgerTxns           CompetitionLedgerTxn[]
   leaderboardSnapshots LeaderboardSnapshot[]
 
-  // Optional: tutorial state
-  // onboarding OnboardingState?
   account Account[]
   session Session[]
 
@@ -86,8 +80,7 @@ model CompetitionMember {
   userId        String
   role          MemberRole @default(PLAYER)
   joinedAt      DateTime   @default(now())
-
-  lastSeenAt DateTime @default(now())
+  lastSeenAt    DateTime   @default(now())
 
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -108,7 +101,6 @@ model Competition {
   createdBy   User     @relation("CompetitionsCreatedBy", fields: [createdById], references: [id])
   gameType    GameType @default(FAUX_STAKES)
 
-  // Helpful flags
   isDemo     Boolean @default(false)
   isTemplate Boolean @default(false)
 
@@ -117,7 +109,6 @@ model Competition {
   closedAt       DateTime?
   lastActivityAt DateTime  @default(now())
 
-  // Relationships
   members               CompetitionMember[]
   fauxStakesCompetition FauxStakesCompetition?
   teams                 Team[]
@@ -148,7 +139,6 @@ model Team {
 
   selections Selection[]
 
-  // optional UI flair
   emoji String?
   color String?
 
@@ -239,10 +229,6 @@ model CompetitionLedgerTxn {
   @@index([marketId])
 }
 
-// =======================
-// Better Auth Models
-// =======================
-
 model Session {
   id        String   @id
   expiresAt DateTime
@@ -314,6 +300,7 @@ model LeaderboardSnapshot {
   market      Market      @relation(fields: [marketId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([marketId, userId])
   @@index([competitionId, createdAt])
   @@index([competitionId, userId, createdAt])
   @@index([marketId])
