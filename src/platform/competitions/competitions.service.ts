@@ -11,6 +11,29 @@ import { GameEngineRegistryService } from '../game-registry/game-engine-registry
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
 
+function isJoinCodeUniqueConstraintError(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+
+  if (typeof target === 'string') {
+    return target.includes('joinCode');
+  }
+
+  if (Array.isArray(target)) {
+    return target.some(
+      (field) => typeof field === 'string' && field === 'joinCode',
+    );
+  }
+
+  return false;
+}
+
 @Injectable()
 export class CompetitionsService {
   constructor(
@@ -97,13 +120,13 @@ export class CompetitionsService {
       } catch (error) {
         /*
          * joinCode has a DB unique constraint, which is the final
-         * authority. We don't need a race-prone "does this code exist?"
-         * query before creating the Competition.
+         * authority.
+         *
+         * Only a collision on THAT constraint should generate another
+         * code and retry the transaction. Any other P2002 is a genuine
+         * data/invariant problem and must surface normally.
          */
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
+        if (isJoinCodeUniqueConstraintError(error)) {
           continue;
         }
 

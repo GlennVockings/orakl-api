@@ -13,8 +13,11 @@ import {
 import { PrismaService } from '../../../prisma.service';
 import { CreateBetDto } from './dto/create-bet.dto';
 
-function txnSign(type: LedgerType) {
-  return type === LedgerType.DEBIT ? -1 : 1;
+function signedAmount(
+  type: LedgerType,
+  amount: Prisma.Decimal,
+): Prisma.Decimal {
+  return type === LedgerType.DEBIT ? amount.negated() : amount;
 }
 
 @Injectable()
@@ -25,7 +28,7 @@ export class BetsService {
     tx: Prisma.TransactionClient,
     competitionId: string,
     userId: string,
-  ) {
+  ): Promise<Prisma.Decimal> {
     const txns = await tx.competitionLedgerTxn.findMany({
       where: {
         competitionId,
@@ -38,8 +41,8 @@ export class BetsService {
     });
 
     return txns.reduce(
-      (sum, txn) => sum + Number(txn.amount) * txnSign(txn.type),
-      0,
+      (sum, txn) => sum.add(signedAmount(txn.type, txn.amount)),
+      new Prisma.Decimal(0),
     );
   }
 
@@ -47,7 +50,7 @@ export class BetsService {
     tx: Prisma.TransactionClient,
     competitionId: string,
     userId: string,
-  ) {
+  ): Promise<void> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "CompetitionMember"
@@ -92,13 +95,13 @@ export class BetsService {
     });
 
     const currentBalance = txns.reduce(
-      (sum, txn) => sum + Number(txn.amount) * txnSign(txn.type),
-      0,
+      (sum, txn) => sum.add(signedAmount(txn.type, txn.amount)),
+      new Prisma.Decimal(0),
     );
 
     return {
       bet,
-      currentBalance,
+      currentBalance: currentBalance.toNumber(),
     };
   }
 
@@ -118,14 +121,10 @@ export class BetsService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         /*
-         * This conditional write does two jobs:
+         * Lock the market row while proving it is OPEN.
          *
-         * 1. It proves the market is still OPEN at the point the stake
-         *    starts being accepted.
-         * 2. PostgreSQL takes a row lock on the market, serialising this
-         *    operation against closeMarket().
-         *
-         * If closing wins the row lock first, this affects zero rows.
+         * closeMarket() updates this same row, so staking and closing
+         * cannot cross one another without one transaction waiting.
          */
         const openMarket = await tx.market.updateMany({
           where: {
@@ -139,34 +138,15 @@ export class BetsService {
         });
 
         if (openMarket.count !== 1) {
-          const market = await tx.market.findFirst({
-            where: {
-              id: dto.marketId,
-              competitionId,
-            },
-            select: {
-              id: true,
-            },
-          });
-
-          if (!market) {
-            throw new BadRequestException(
-              'Market does not exist for this competition',
-            );
-          }
-
-          throw new ForbiddenException('Market is not open for betting');
+          throw new BadRequestException('Market is not open for staking');
         }
 
         /*
-         * Market locking protects the market lifecycle, but it does not
-         * protect a player's balance across DIFFERENT markets.
+         * One CompetitionMember row represents this player's wallet
+         * inside this competition.
          *
-         * The CompetitionMember row is unique for competition + user, so
-         * we use it as the per-player wallet lock.
-         *
-         * Two simultaneous stakes from the same player must therefore
-         * calculate their balances one after the other.
+         * Locking it serializes concurrent balance-changing stakes for
+         * the same player even when they target different markets.
          */
         await this.lockPlayerWallet(tx, competitionId, userId);
 
@@ -175,6 +155,10 @@ export class BetsService {
             id: dto.selectionId,
             marketId: dto.marketId,
             status: SelectionStatus.ACTIVE,
+            market: {
+              competitionId,
+              status: MarketStatus.OPEN,
+            },
           },
           select: {
             id: true,
@@ -194,11 +178,12 @@ export class BetsService {
           userId,
         );
 
-        if (currentBalance < dto.stake) {
-          throw new ForbiddenException('Insufficient balance');
+        const stake = new Prisma.Decimal(dto.stake);
+
+        if (currentBalance.lt(stake)) {
+          throw new BadRequestException('Insufficient balance');
         }
 
-        const stake = new Prisma.Decimal(dto.stake);
         const oddsSnapshot = selection.decimalOdds;
         const potentialReturn = stake.mul(oddsSnapshot);
 
@@ -217,11 +202,7 @@ export class BetsService {
         });
 
         /*
-         * The stake and its debit live in the same transaction.
-         *
-         * We therefore cannot end up with:
-         * - a Bet without its DEBIT, or
-         * - a DEBIT without its Bet.
+         * Bet + DEBIT are atomic.
          */
         await tx.competitionLedgerTxn.create({
           data: {
@@ -245,17 +226,13 @@ export class BetsService {
 
         return {
           bet,
-          currentBalance: currentBalance - dto.stake,
+          currentBalance: currentBalance.sub(stake).toNumber(),
         };
       });
     } catch (error) {
       /*
-       * A double-submit can arrive twice before either request has seen
-       * the other's Bet.
-       *
-       * The database unique constraint on idempotencyKey is the final
-       * authority. P2002 means another request won that race, so return
-       * the already-created result instead of charging twice.
+       * The unique idempotencyKey is the final protection against two
+       * simultaneous copies of the same stake.
        */
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -332,9 +309,9 @@ export class BetsService {
 
       return {
         id: bet.id,
-        stake: Number(bet.stake),
-        potentialReturn: Number(bet.potentialReturn),
-        oddsSnapshot: Number(bet.oddsSnapshot),
+        stake: bet.stake.toNumber(),
+        potentialReturn: bet.potentialReturn.toNumber(),
+        oddsSnapshot: bet.oddsSnapshot.toNumber(),
         placedAt: bet.placedAt,
         settledAt: bet.settledAt,
         status: bet.status,
@@ -426,9 +403,9 @@ export class BetsService {
 
       return {
         id: bet.id,
-        stake: Number(bet.stake),
-        potentialReturn: Number(bet.potentialReturn),
-        oddsSnapshot: Number(bet.oddsSnapshot),
+        stake: bet.stake.toNumber(),
+        potentialReturn: bet.potentialReturn.toNumber(),
+        oddsSnapshot: bet.oddsSnapshot.toNumber(),
         placedAt: bet.placedAt,
         settledAt: bet.settledAt,
         status: bet.status,
@@ -467,13 +444,6 @@ export class BetsService {
     const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      /*
-       * Find enough information to identify the market first.
-       *
-       * We deliberately do not trust this first read as our final OPEN
-       * check. Its purpose is only to locate the market row we need to
-       * lock.
-       */
       const candidateBet = await tx.bet.findFirst({
         where: {
           competitionId,
@@ -495,12 +465,7 @@ export class BetsService {
       }
 
       /*
-       * Use the same market-row locking strategy as placeBet().
-       *
-       * If closeMarket() wins first, the market is CLOSED and this update
-       * affects zero rows.
-       *
-       * If undo wins first, closeMarket() waits until the refund commits.
+       * Lock the market while proving it is still OPEN.
        */
       const openMarket = await tx.market.updateMany({
         where: {
@@ -519,12 +484,6 @@ export class BetsService {
         );
       }
 
-      /*
-       * Re-read the Bet after obtaining the market lock.
-       *
-       * This means our decision is based on state protected by the same
-       * transaction that performs the refund.
-       */
       const bet = await tx.bet.findFirst({
         where: {
           id: betId,

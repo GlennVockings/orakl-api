@@ -133,9 +133,10 @@ model FauxStakesCompetition {
 }
 
 model Team {
-  id            String @id @default(cuid())
-  competitionId String
-  name          String
+  id             String @id @default(cuid())
+  competitionId  String
+  name           String
+  normalizedName String
 
   selections Selection[]
 
@@ -144,7 +145,7 @@ model Team {
 
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
-  @@unique([competitionId, name])
+  @@unique([competitionId, normalizedName])
   @@index([competitionId])
 }
 
@@ -212,7 +213,7 @@ model CompetitionLedgerTxn {
   amount        Decimal    @db.Decimal(12, 2)
 
   betId String?
-  bet   Bet?    @relation(fields: [betId], references: [id], onDelete: SetNull)
+  bet   Bet? @relation(fields: [betId], references: [id], onDelete: SetNull)
 
   marketId String?
   market   Market? @relation(fields: [marketId], references: [id], onDelete: SetNull)
@@ -246,11 +247,11 @@ model Session {
 }
 
 model Account {
-  id                    String    @id
+  id                    String   @id
   accountId             String
   providerId            String
   userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -258,8 +259,8 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([userId])
   @@map("account")

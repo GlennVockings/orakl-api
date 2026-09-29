@@ -316,6 +316,7 @@ export class FauxStakesEngine implements GameEngine {
         data: parsed.teamNames.map((name) => ({
           competitionId,
           name,
+          normalizedName: name.toLowerCase(),
         })),
       });
     }
