@@ -9,114 +9,55 @@ import {
 import { PrismaService } from '../../../prisma.service';
 import { BetsService } from './bets.service';
 
-type LedgerFindManyArgs = {
-  where: {
-    competitionId: string;
-    userId: string;
-  };
-  select: {
-    type: true;
-    amount: true;
-  };
-};
-
-type BetCreateArgs = {
-  data: {
-    competitionId: string;
-    userId: string;
-    selectionId: string;
-    stake: Prisma.Decimal;
-    oddsSnapshot: Prisma.Decimal;
-    potentialReturn: Prisma.Decimal;
-    status: BetStatus;
-    placedAt: Date;
-  };
-};
-
-type LedgerCreateArgs = {
-  data: {
-    competitionId: string;
-    userId: string;
-    type: LedgerType;
-    amount: Prisma.Decimal;
-    betId: string;
-    marketId: string;
-  };
-};
-
-type CompetitionUpdateArgs = {
-  where: {
-    id: string;
-  };
-  data: {
-    lastActivityAt: Date;
-  };
-};
-
 describe('BetsService', () => {
   const fixedNow = new Date('2026-07-23T12:00:00.000Z');
 
-  const marketFindFirst = jest.fn();
+  const betFindUnique = jest.fn();
+  const betFindMany = jest.fn();
 
-  const ledgerFindMany = jest.fn<
-    Promise<
-      Array<{
-        type: LedgerType;
-        amount: Prisma.Decimal;
-      }>
-    >,
-    [LedgerFindManyArgs]
-  >();
+  const transactionBetCreate = jest.fn();
+  const transactionBetFindFirst = jest.fn();
+  const transactionBetUpdateMany = jest.fn();
 
-  const betCreate = jest.fn<
-    Promise<{
-      id: string;
-      competitionId: string;
-      userId: string;
-      selectionId: string;
-      stake: Prisma.Decimal;
-      oddsSnapshot: Prisma.Decimal;
-      potentialReturn: Prisma.Decimal;
-      status: BetStatus;
-      placedAt: Date;
-    }>,
-    [BetCreateArgs]
-  >();
+  const ledgerFindMany = jest.fn();
+  const ledgerCreate = jest.fn();
 
-  const ledgerCreate = jest.fn<
-    Promise<{
-      id: string;
-    }>,
-    [LedgerCreateArgs]
-  >();
-
-  const competitionUpdate = jest.fn<
-    Promise<{
-      id: string;
-    }>,
-    [CompetitionUpdateArgs]
-  >();
+  const marketUpdateMany = jest.fn();
+  const selectionFindFirst = jest.fn();
+  const competitionUpdate = jest.fn();
+  const queryRaw = jest.fn();
 
   const transactionClient = {
+    $queryRaw: queryRaw,
+    market: {
+      updateMany: marketUpdateMany,
+    },
+    selection: {
+      findFirst: selectionFindFirst,
+    },
     competitionLedgerTxn: {
       findMany: ledgerFindMany,
       create: ledgerCreate,
     },
     bet: {
-      create: betCreate,
+      create: transactionBetCreate,
+      findFirst: transactionBetFindFirst,
+      updateMany: transactionBetUpdateMany,
     },
     competition: {
       update: competitionUpdate,
     },
   };
 
-  type TransactionCallback = (tx: typeof transactionClient) => Promise<unknown>;
-
-  const transaction = jest.fn<Promise<unknown>, [TransactionCallback]>();
+  const transaction = jest.fn();
 
   const prisma = {
-    market: {
-      findFirst: marketFindFirst,
+    bet: {
+      findUnique: betFindUnique,
+      findMany: betFindMany,
+    },
+    competitionLedgerTxn: {
+      findMany: ledgerFindMany,
     },
     $transaction: transaction,
   } as unknown as PrismaService;
@@ -127,19 +68,12 @@ describe('BetsService', () => {
     marketId: 'market-1',
     selectionId: 'selection-1',
     stake: 10,
+    idempotencyKey: '3d594650-3436-4a73-92eb-c5cbdadf13c5',
   };
 
-  const openMarket = {
-    id: 'market-1',
-    competitionId: 'competition-1',
-    status: MarketStatus.OPEN,
-    selections: [
-      {
-        id: 'selection-1',
-        status: SelectionStatus.ACTIVE,
-        decimalOdds: new Prisma.Decimal(2.5),
-      },
-    ],
+  const selection = {
+    id: 'selection-1',
+    decimalOdds: new Prisma.Decimal(2.5),
   };
 
   beforeEach(() => {
@@ -147,9 +81,28 @@ describe('BetsService', () => {
     jest.setSystemTime(fixedNow);
     jest.clearAllMocks();
 
-    transaction.mockImplementation(async (callback) =>
-      callback(transactionClient),
+    betFindUnique.mockResolvedValue(null);
+
+    transaction.mockImplementation(
+      async (callback: (tx: typeof transactionClient) => Promise<unknown>) =>
+        callback(transactionClient),
     );
+
+    marketUpdateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    queryRaw.mockResolvedValue([
+      {
+        id: 'membership-1',
+      },
+    ]);
+
+    selectionFindFirst.mockResolvedValue(selection);
+
+    competitionUpdate.mockResolvedValue({
+      id: 'competition-1',
+    });
 
     service = new BetsService(prisma);
   });
@@ -159,31 +112,52 @@ describe('BetsService', () => {
   });
 
   describe('placeBet', () => {
-    it('rejects a market outside the competition', async () => {
-      marketFindFirst.mockResolvedValue(null);
+    it('returns an existing bet for the same idempotency key without creating another stake', async () => {
+      const existingBet = {
+        id: 'bet-existing',
+        competitionId: 'competition-1',
+        userId: 'user-1',
+        selectionId: 'selection-1',
+        stake: new Prisma.Decimal(10),
+        oddsSnapshot: new Prisma.Decimal(2.5),
+        potentialReturn: new Prisma.Decimal(25),
+        status: BetStatus.PENDING,
+        placedAt: fixedNow,
+        settledAt: null,
+        idempotencyKey: dto.idempotencyKey,
+      };
 
-      await expect(
-        service.placeBet('user-1', 'competition-1', dto),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      betFindUnique.mockResolvedValue(existingBet);
 
-      expect(marketFindFirst).toHaveBeenCalledWith({
-        where: {
-          id: 'market-1',
-          competitionId: 'competition-1',
+      ledgerFindMany.mockResolvedValue([
+        {
+          type: LedgerType.CREDIT,
+          amount: new Prisma.Decimal(100),
         },
-        include: {
-          selections: true,
+        {
+          type: LedgerType.DEBIT,
+          amount: new Prisma.Decimal(10),
         },
+      ]);
+
+      const result = await service.placeBet('user-1', 'competition-1', dto);
+
+      expect(result).toEqual({
+        bet: existingBet,
+        currentBalance: 90,
       });
 
       expect(transaction).not.toHaveBeenCalled();
-      expect(betCreate).not.toHaveBeenCalled();
+      expect(transactionBetCreate).not.toHaveBeenCalled();
+      expect(ledgerCreate).not.toHaveBeenCalled();
     });
 
-    it('rejects a market that is not open', async () => {
-      marketFindFirst.mockResolvedValue({
-        ...openMarket,
-        status: MarketStatus.CLOSED,
+    it('rejects reuse of an idempotency key owned by another player', async () => {
+      betFindUnique.mockResolvedValue({
+        id: 'bet-existing',
+        competitionId: 'competition-1',
+        userId: 'another-user',
+        idempotencyKey: dto.idempotencyKey,
       });
 
       await expect(
@@ -191,11 +165,60 @@ describe('BetsService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(transaction).not.toHaveBeenCalled();
-      expect(betCreate).not.toHaveBeenCalled();
     });
 
-    it('rejects a selection outside the market', async () => {
-      marketFindFirst.mockResolvedValue(openMarket);
+    it('rejects reuse of an idempotency key from another competition', async () => {
+      betFindUnique.mockResolvedValue({
+        id: 'bet-existing',
+        competitionId: 'competition-2',
+        userId: 'user-1',
+        idempotencyKey: dto.idempotencyKey,
+      });
+
+      await expect(
+        service.placeBet('user-1', 'competition-1', dto),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a market that is not open for staking', async () => {
+      marketUpdateMany.mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        service.placeBet('user-1', 'competition-1', dto),
+      ).rejects.toThrow('Market is not open for staking');
+
+      expect(marketUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'market-1',
+          competitionId: 'competition-1',
+          status: MarketStatus.OPEN,
+        },
+        data: {
+          updatedAt: fixedNow,
+        },
+      });
+
+      expect(queryRaw).not.toHaveBeenCalled();
+      expect(transactionBetCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a player who is not a competition member', async () => {
+      queryRaw.mockResolvedValue([]);
+
+      await expect(
+        service.placeBet('user-1', 'competition-1', dto),
+      ).rejects.toThrow('You are not a member of this competition');
+
+      expect(selectionFindFirst).not.toHaveBeenCalled();
+      expect(transactionBetCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a selection outside the requested open market', async () => {
+      selectionFindFirst.mockResolvedValue(null);
 
       await expect(
         service.placeBet('user-1', 'competition-1', {
@@ -204,32 +227,27 @@ describe('BetsService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(transaction).not.toHaveBeenCalled();
-      expect(betCreate).not.toHaveBeenCalled();
-    });
-
-    it('rejects an inactive selection', async () => {
-      marketFindFirst.mockResolvedValue({
-        ...openMarket,
-        selections: [
-          {
-            ...openMarket.selections[0],
-            status: SelectionStatus.LOSER,
+      expect(selectionFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'selection-from-another-market',
+          marketId: 'market-1',
+          status: SelectionStatus.ACTIVE,
+          market: {
+            competitionId: 'competition-1',
+            status: MarketStatus.OPEN,
           },
-        ],
+        },
+        select: {
+          id: true,
+          decimalOdds: true,
+        },
       });
 
-      await expect(
-        service.placeBet('user-1', 'competition-1', dto),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-
-      expect(transaction).not.toHaveBeenCalled();
-      expect(betCreate).not.toHaveBeenCalled();
+      expect(transactionBetCreate).not.toHaveBeenCalled();
+      expect(ledgerCreate).not.toHaveBeenCalled();
     });
 
-    it('rejects a bet when the balance is too low', async () => {
-      marketFindFirst.mockResolvedValue(openMarket);
-
+    it('rejects a stake when the available balance is too low', async () => {
       ledgerFindMany.mockResolvedValue([
         {
           type: LedgerType.CREDIT,
@@ -241,44 +259,26 @@ describe('BetsService', () => {
         service.placeBet('user-1', 'competition-1', dto),
       ).rejects.toThrow('Insufficient balance');
 
-      expect(transaction).toHaveBeenCalledTimes(1);
-
-      expect(ledgerFindMany).toHaveBeenCalledWith({
-        where: {
-          competitionId: 'competition-1',
-          userId: 'user-1',
-        },
-        select: {
-          type: true,
-          amount: true,
-        },
-      });
-
-      expect(betCreate).not.toHaveBeenCalled();
+      expect(transactionBetCreate).not.toHaveBeenCalled();
       expect(ledgerCreate).not.toHaveBeenCalled();
       expect(competitionUpdate).not.toHaveBeenCalled();
     });
 
-    it('creates the bet and matching ledger debit', async () => {
-      marketFindFirst.mockResolvedValue(openMarket);
-
-      ledgerFindMany
-        .mockResolvedValueOnce([
-          {
-            type: LedgerType.CREDIT,
-            amount: new Prisma.Decimal(100),
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            type: LedgerType.CREDIT,
-            amount: new Prisma.Decimal(100),
-          },
-          {
-            type: LedgerType.DEBIT,
-            amount: new Prisma.Decimal(10),
-          },
-        ]);
+    it('calculates the wallet using Decimal values and creates the bet and debit atomically', async () => {
+      ledgerFindMany.mockResolvedValue([
+        {
+          type: LedgerType.CREDIT,
+          amount: new Prisma.Decimal(100),
+        },
+        {
+          type: LedgerType.DEBIT,
+          amount: new Prisma.Decimal(15),
+        },
+        {
+          type: LedgerType.REFUND,
+          amount: new Prisma.Decimal(5),
+        },
+      ]);
 
       const createdBet = {
         id: 'bet-1',
@@ -290,23 +290,21 @@ describe('BetsService', () => {
         potentialReturn: new Prisma.Decimal(25),
         status: BetStatus.PENDING,
         placedAt: fixedNow,
+        settledAt: null,
+        idempotencyKey: dto.idempotencyKey,
       };
 
-      betCreate.mockResolvedValue(createdBet);
+      transactionBetCreate.mockResolvedValue(createdBet);
 
       ledgerCreate.mockResolvedValue({
         id: 'ledger-1',
-      });
-
-      competitionUpdate.mockResolvedValue({
-        id: 'competition-1',
       });
 
       const result = await service.placeBet('user-1', 'competition-1', dto);
 
       expect(transaction).toHaveBeenCalledTimes(1);
 
-      expect(betCreate).toHaveBeenCalledWith({
+      expect(transactionBetCreate).toHaveBeenCalledWith({
         data: {
           competitionId: 'competition-1',
           userId: 'user-1',
@@ -316,6 +314,7 @@ describe('BetsService', () => {
           potentialReturn: new Prisma.Decimal(25),
           status: BetStatus.PENDING,
           placedAt: fixedNow,
+          idempotencyKey: dto.idempotencyKey,
         },
       });
 
@@ -339,11 +338,9 @@ describe('BetsService', () => {
         },
       });
 
-      expect(ledgerFindMany).toHaveBeenCalledTimes(2);
-
       expect(result).toEqual({
         bet: createdBet,
-        currentBalance: 90,
+        currentBalance: 80,
       });
     });
   });

@@ -5,6 +5,8 @@ import { WsGateway } from '../realtime/ws.gateway';
 import { CreateTeamsDto } from './dto/create-team.dto';
 import { EditTeamsDto } from './dto/edit-team.dto';
 
+const MAX_TEAMS_PER_COMPETITION = 100;
+
 function normalizeTeamName(name: string): string {
   return name.trim().toLowerCase();
 }
@@ -17,22 +19,7 @@ export class TeamsService {
   ) {}
 
   async createTeams(competitionId: string, dto: CreateTeamsDto) {
-    const competition = await this.prisma.competition.findUnique({
-      where: {
-        id: competitionId,
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (!competition) {
-      throw new BadRequestException('Competition does not exist');
-    }
-
     const names = dto.names.map((name) => name.trim());
-
     const normalizedNames = names.map(normalizeTeamName);
 
     if (new Set(normalizedNames).size !== normalizedNames.length) {
@@ -40,13 +27,63 @@ export class TeamsService {
     }
 
     try {
-      await this.prisma.team.createMany({
-        data: names.map((name, index) => ({
-          competitionId,
-          name,
-          normalizedName: normalizedNames[index],
-        })),
+      const teams = await this.prisma.$transaction(async (tx) => {
+        /*
+         * Lock the competition row before checking the current team count.
+         *
+         * Every createTeams request for the same competition must acquire this
+         * lock, so concurrent requests cannot both observe the same old count
+         * and push the competition beyond the 100-team limit.
+         */
+        const lockedCompetition = await tx.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+            SELECT "id"
+            FROM "Competition"
+            WHERE "id" = ${competitionId}
+            FOR UPDATE
+          `,
+        );
+
+        if (lockedCompetition.length !== 1) {
+          throw new BadRequestException('Competition does not exist');
+        }
+
+        const existingTeamCount = await tx.team.count({
+          where: {
+            competitionId,
+          },
+        });
+
+        if (existingTeamCount + names.length > MAX_TEAMS_PER_COMPETITION) {
+          throw new BadRequestException(
+            `A competition can have at most ${MAX_TEAMS_PER_COMPETITION} teams`,
+          );
+        }
+
+        await tx.team.createMany({
+          data: names.map((name, index) => ({
+            competitionId,
+            name,
+            normalizedName: normalizedNames[index],
+          })),
+        });
+
+        return tx.team.findMany({
+          where: {
+            competitionId,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        });
       });
+
+      this.wsGateway.emitTeamCreated(competitionId, {
+        createdCount: names.length,
+        names,
+      });
+
+      return teams;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -59,21 +96,6 @@ export class TeamsService {
 
       throw error;
     }
-
-    this.wsGateway.emitTeamCreated(competitionId, {
-      createdCount: names.length,
-      names,
-    });
-
-    return this.prisma.team.findMany({
-      where: {
-        competitionId,
-      },
-
-      orderBy: {
-        name: 'asc',
-      },
-    });
   }
 
   async getTeams(competitionId: string) {
@@ -81,7 +103,6 @@ export class TeamsService {
       where: {
         id: competitionId,
       },
-
       select: {
         id: true,
       },
@@ -95,7 +116,6 @@ export class TeamsService {
       where: {
         competitionId,
       },
-
       orderBy: {
         name: 'asc',
       },
@@ -115,7 +135,6 @@ export class TeamsService {
           id: dto.teamId,
           competitionId,
         },
-
         data: {
           name,
           normalizedName: normalizeTeamName(name),

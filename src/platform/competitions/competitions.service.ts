@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { MemberRole, Prisma } from '@prisma/client';
@@ -36,6 +37,8 @@ function isJoinCodeUniqueConstraintError(error: unknown): boolean {
 
 @Injectable()
 export class CompetitionsService {
+  private readonly logger = new Logger(CompetitionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gameEngineRegistry: GameEngineRegistryService,
@@ -304,10 +307,17 @@ export class CompetitionsService {
      * A failed database transaction must never emit a successful
      * "member joined" event.
      */
-    await engine.afterUserJoined?.({
-      competitionId: competition.id,
-      userId,
-    });
+    try {
+      await engine.afterUserJoined?.({
+        competitionId: competition.id,
+        userId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Competition join committed but post-join side effect failed for competition ${competition.id}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     return result;
   }

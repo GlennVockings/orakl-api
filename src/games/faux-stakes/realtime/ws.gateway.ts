@@ -167,6 +167,24 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
     };
   }
 
+  private emitToCompetition(
+    competitionId: string,
+    event: string,
+    payload: Record<string, unknown>,
+  ): void {
+    try {
+      this.server.to(`competition:${competitionId}`).emit(event, {
+        competitionId,
+        ...payload,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Realtime notification failed for competition ${competitionId} (${event})`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+  }
+
   emitMemberJoined(
     competitionId: string,
     payload: {
@@ -174,12 +192,7 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
       displayName: string;
     },
   ): void {
-    this.server
-      .to(`competition:${competitionId}`)
-      .emit('competition.member_joined', {
-        competitionId,
-        ...payload,
-      });
+    this.emitToCompetition(competitionId, 'competition.member_joined', payload);
   }
 
   emitMarketCreated(
@@ -188,12 +201,11 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
       name: string;
     },
   ): void {
-    this.server
-      .to(`competition:${competitionId}`)
-      .emit('faux-stakes.market_created', {
-        competitionId,
-        ...payload,
-      });
+    this.emitToCompetition(
+      competitionId,
+      'faux-stakes.market_created',
+      payload,
+    );
   }
 
   emitMarketSettled(
@@ -204,12 +216,11 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
       winningSelectionId: string;
     },
   ): void {
-    this.server
-      .to(`competition:${competitionId}`)
-      .emit('faux-stakes.market_settled', {
-        competitionId,
-        ...payload,
-      });
+    this.emitToCompetition(
+      competitionId,
+      'faux-stakes.market_settled',
+      payload,
+    );
   }
 
   emitMarketClosed(
@@ -219,12 +230,7 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
       name: string;
     },
   ): void {
-    this.server
-      .to(`competition:${competitionId}`)
-      .emit('faux-stakes.market_closed', {
-        competitionId,
-        ...payload,
-      });
+    this.emitToCompetition(competitionId, 'faux-stakes.market_closed', payload);
   }
 
   emitTeamCreated(
@@ -234,11 +240,6 @@ export class WsGateway implements OnGatewayInit, OnGatewayDisconnect {
       names: string[];
     },
   ): void {
-    this.server
-      .to(`competition:${competitionId}`)
-      .emit('faux-stakes.team_created', {
-        competitionId,
-        ...payload,
-      });
+    this.emitToCompetition(competitionId, 'faux-stakes.team_created', payload);
   }
 }

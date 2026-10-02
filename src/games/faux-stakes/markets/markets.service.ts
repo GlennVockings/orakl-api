@@ -62,96 +62,119 @@ export class MarketsService {
 
     const now = new Date();
 
-    const market = await this.prisma.$transaction(async (tx) => {
-      if (hasTeamSelections) {
-        const teamIds = dto.teamSelections!.map(
-          (selection) => selection.teamId,
-        );
+    let market: Prisma.MarketGetPayload<{
+      include: {
+        selections: {
+          include: {
+            team: true;
+          };
+        };
+      };
+    }>;
 
-        const teams = await tx.team.findMany({
-          where: {
-            id: {
-              in: teamIds,
+    try {
+      market = await this.prisma.$transaction(async (tx) => {
+        if (hasTeamSelections) {
+          const teamIds = dto.teamSelections!.map(
+            (selection) => selection.teamId,
+          );
+
+          const teams = await tx.team.findMany({
+            where: {
+              id: {
+                in: teamIds,
+              },
+              competitionId,
             },
+            select: {
+              id: true,
+            },
+          });
+
+          if (teams.length !== teamIds.length) {
+            throw new BadRequestException(
+              'One or more teamIds are invalid for this competition',
+            );
+          }
+
+          const uniqueTeamIds = new Set(teamIds);
+
+          if (uniqueTeamIds.size !== teamIds.length) {
+            throw new BadRequestException(
+              'Duplicate teamIds are not allowed in a market',
+            );
+          }
+        }
+
+        if (hasLabelSelections) {
+          const labels = dto.labelSelections!.map((selection) =>
+            selection.label.trim(),
+          );
+
+          const uniqueLabels = new Set(
+            labels.map((label) => label.toLowerCase()),
+          );
+
+          if (uniqueLabels.size !== labels.length) {
+            throw new BadRequestException(
+              'Duplicate labels are not allowed in a market',
+            );
+          }
+        }
+
+        const createdMarket = await tx.market.create({
+          data: {
             competitionId,
+            name: dto.name.trim(),
+            status: MarketStatus.DRAFT,
+
+            selections: hasTeamSelections
+              ? {
+                  create: dto.teamSelections!.map((selection) => ({
+                    teamId: selection.teamId,
+                    decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
+                  })),
+                }
+              : {
+                  create: dto.labelSelections!.map((selection) => ({
+                    label: selection.label.trim(),
+                    decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
+                  })),
+                },
           },
-          select: {
-            id: true,
+
+          include: {
+            selections: {
+              include: {
+                team: true,
+              },
+            },
           },
         });
 
-        if (teams.length !== teamIds.length) {
-          throw new BadRequestException(
-            'One or more teamIds are invalid for this competition',
-          );
-        }
-
-        const uniqueTeamIds = new Set(teamIds);
-
-        if (uniqueTeamIds.size !== teamIds.length) {
-          throw new BadRequestException(
-            'Duplicate teamIds are not allowed in a market',
-          );
-        }
-      }
-
-      if (hasLabelSelections) {
-        const labels = dto.labelSelections!.map((selection) =>
-          selection.label.trim(),
-        );
-
-        const uniqueLabels = new Set(
-          labels.map((label) => label.toLowerCase()),
-        );
-
-        if (uniqueLabels.size !== labels.length) {
-          throw new BadRequestException(
-            'Duplicate labels are not allowed in a market',
-          );
-        }
-      }
-
-      const createdMarket = await tx.market.create({
-        data: {
-          competitionId,
-          name: dto.name.trim(),
-          status: MarketStatus.DRAFT,
-
-          selections: hasTeamSelections
-            ? {
-                create: dto.teamSelections!.map((selection) => ({
-                  teamId: selection.teamId,
-                  decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
-                })),
-              }
-            : {
-                create: dto.labelSelections!.map((selection) => ({
-                  label: selection.label.trim(),
-                  decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
-                })),
-              },
-        },
-
-        include: {
-          selections: {
-            include: {
-              team: true,
-            },
+        await tx.competition.update({
+          where: {
+            id: competitionId,
           },
-        },
-      });
+          data: {
+            lastActivityAt: now,
+          },
+        });
 
-      await tx.competition.update({
-        where: {
-          id: competitionId,
-        },
-        data: {
-          lastActivityAt: now,
-        },
+        return createdMarket;
       });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'A market with this name already exists in this competition',
+        );
+      }
 
-      return createdMarket;
-    });
+      throw error;
+    }
 
     this.wsGateway.emitMarketCreated(competitionId, {
       name: market.name,
@@ -387,10 +410,6 @@ export class MarketsService {
           status: BetStatus.PENDING,
         },
       });
-
-      if (bets.length < 1) {
-        throw new BadRequestException('No bets made against this market');
-      }
 
       for (const bet of bets) {
         const hasWon = bet.selectionId === dto.winningSelectionId;
