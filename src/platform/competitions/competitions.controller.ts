@@ -14,6 +14,7 @@ import { CompetitionAccessService } from './competition-access.service';
 import { CompetitionsService } from './competitions.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { JoinCompetitionDto } from './dto/join-competition.dto';
+import { AuthenticatedUserThrottlerGuard } from './guards/authenticated-user-throttler.guard';
 import { CompetitionJoinThrottlerGuard } from './guards/competition-join-throttler.guard';
 
 @Controller('competitions')
@@ -23,7 +24,8 @@ export class CompetitionsController {
     private readonly competitionAccess: CompetitionAccessService,
   ) {}
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post()
   async create(
     @CurrentUserId() userId: string,
@@ -32,7 +34,8 @@ export class CompetitionsController {
     return this.competitions.createCompetition(userId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get()
   async getAll(@CurrentUserId() userId: string) {
     return this.competitions.getAll(userId);
@@ -53,7 +56,8 @@ export class CompetitionsController {
     return this.competitions.joinCompetition(userId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get(':competitionId')
   async getCompetition(
     @CurrentUserId() userId: string,
@@ -62,7 +66,8 @@ export class CompetitionsController {
     return this.competitions.getCompetition(userId, competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get(':competitionId/members')
   async getMembers(
     @CurrentUserId() userId: string,
@@ -76,7 +81,8 @@ export class CompetitionsController {
     return this.competitions.getMembers(competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Patch(':competitionId/seen')
   async markSeen(
     @CurrentUserId() userId: string,
@@ -85,7 +91,8 @@ export class CompetitionsController {
     return this.competitions.markSeen(userId, competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Delete(':competitionId')
   async deleteCompetition(
     @CurrentUserId() userId: string,
@@ -96,7 +103,8 @@ export class CompetitionsController {
     return this.competitions.deleteCompetition(userId, competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard)
+  @UseGuards(BetterAuthJwtGuard, AuthenticatedUserThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get(':competitionId/me')
   async getMe(
     @CurrentUserId() userId: string,

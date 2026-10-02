@@ -7,7 +7,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { BetterAuthJwtGuard } from '../../../platform/auth';
+import { AuthenticatedUserThrottlerGuard } from 'src/platform/competitions/guards/authenticated-user-throttler.guard';
 import { FauxStakesAdminGuard } from '../../../platform/competitions/guards/faux-stakes-admin.guard';
 import { FauxStakesMemberGuard } from '../../../platform/competitions/guards/faux-stakes-member.guard';
 import { CreateTeamsDto } from './dto/create-team.dto';
@@ -18,7 +20,12 @@ import { TeamsService } from './teams.service';
 export class TeamsController {
   constructor(private readonly teams: TeamsService) {}
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesAdminGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesAdminGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post()
   async createTeams(
     @Param('competitionId')
@@ -28,7 +35,12 @@ export class TeamsController {
     return this.teams.createTeams(competitionId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesMemberGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesMemberGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get()
   async getTeams(
     @Param('competitionId')
@@ -37,7 +49,12 @@ export class TeamsController {
     return this.teams.getTeams(competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesAdminGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesAdminGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Patch()
   async editTeam(
     @Param('competitionId')

@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { BetterAuthJwtGuard, CurrentUserId } from 'src/platform/auth';
+import { AuthenticatedUserThrottlerGuard } from 'src/platform/competitions/guards/authenticated-user-throttler.guard';
 import { FauxStakesMemberGuard } from 'src/platform/competitions/guards/faux-stakes-member.guard';
 import { BetsService } from './bets.service';
 import { CreateBetDto } from './dto/create-bet.dto';
@@ -8,7 +10,12 @@ import { CreateBetDto } from './dto/create-bet.dto';
 export class BetsController {
   constructor(private readonly betsService: BetsService) {}
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesMemberGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesMemberGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Post()
   async placeBet(
     @CurrentUserId() userId: string,
@@ -19,7 +26,12 @@ export class BetsController {
     return this.betsService.placeBet(userId, competitionId, body);
   }
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesMemberGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesMemberGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get()
   async getUserBets(
     @CurrentUserId() userId: string,
@@ -29,7 +41,12 @@ export class BetsController {
     return this.betsService.getUserBets(userId, competitionId);
   }
 
-  @UseGuards(BetterAuthJwtGuard, FauxStakesMemberGuard)
+  @UseGuards(
+    BetterAuthJwtGuard,
+    FauxStakesMemberGuard,
+    AuthenticatedUserThrottlerGuard,
+  )
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Post(':betId/undo')
   async undoBet(
     @CurrentUserId() userId: string,
