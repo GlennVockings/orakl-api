@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../database/database.module';
 import { GameRegistryModule } from '../game-registry/game-registry.module';
-import { CompetitionAccessService } from './competition-access.service';
+import { CompetitionAccessModule } from './competition-access.module';
 import { CompetitionsController } from './competitions.controller';
 import { CompetitionsService } from './competitions.service';
 import { CompetitionAdminGuard } from './guards/competition-admin.guard';
@@ -14,8 +15,10 @@ import { FauxStakesMemberGuard } from './guards/faux-stakes-member.guard';
 
 @Module({
   imports: [
+    AuthModule,
     DatabaseModule,
     GameRegistryModule,
+    CompetitionAccessModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
@@ -28,7 +31,6 @@ import { FauxStakesMemberGuard } from './guards/faux-stakes-member.guard';
 
   providers: [
     CompetitionsService,
-    CompetitionAccessService,
     CompetitionMemberGuard,
     CompetitionAdminGuard,
     CompetitionJoinThrottlerGuard,
@@ -39,7 +41,7 @@ import { FauxStakesMemberGuard } from './guards/faux-stakes-member.guard';
 
   exports: [
     CompetitionsService,
-    CompetitionAccessService,
+    CompetitionAccessModule,
     CompetitionMemberGuard,
     CompetitionAdminGuard,
     AuthenticatedUserThrottlerGuard,
