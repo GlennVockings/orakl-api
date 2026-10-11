@@ -1,4 +1,6 @@
-import { IsNumber, IsString, Min } from 'class-validator';
+import { IsInt, IsString, IsUUID, Max, Min } from 'class-validator';
+
+const MAX_STAKE = 1_000_000;
 
 export class CreateBetDto {
   @IsString()
@@ -7,7 +9,11 @@ export class CreateBetDto {
   @IsString()
   selectionId!: string;
 
-  @IsNumber()
+  @IsInt()
   @Min(1)
+  @Max(MAX_STAKE)
   stake!: number;
+
+  @IsUUID()
+  idempotencyKey!: string;
 }

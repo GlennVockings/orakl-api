@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { GameType } from './game-type';
 
 export interface LeaderboardRow {
@@ -26,6 +27,11 @@ export interface CompetitionUserContext extends CompetitionContext {
 export interface CompetitionCreatedContext extends CompetitionContext {
   hostUserId: string;
   config?: unknown;
+  tx: Prisma.TransactionClient;
+}
+
+export interface CompetitionUserTransactionContext extends CompetitionUserContext {
+  tx: Prisma.TransactionClient;
 }
 
 export type GamePlayerState = Record<string, unknown>;
@@ -48,7 +54,11 @@ export interface GameEngine {
     context: CompetitionUserContext,
   ): Promise<GameCompetitionSummary>;
 
+  validateCompetitionConfig?(config: unknown): void;
+
   onCompetitionCreated?(context: CompetitionCreatedContext): Promise<void>;
 
-  onUserJoined?(context: CompetitionUserContext): Promise<void>;
+  onUserJoined?(context: CompetitionUserTransactionContext): Promise<void>;
+
+  afterUserJoined?(context: CompetitionUserContext): Promise<void>;
 }

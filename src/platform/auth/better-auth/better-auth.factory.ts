@@ -22,6 +22,7 @@ export function createBetterAuth(
     }),
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
     },
     user: {
       fields: {

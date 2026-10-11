@@ -2,9 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
-import { PrismaService } from '../../../prisma.service';
-import { CreateMarketDto } from './dto/create-market.dto';
 import {
   BetStatus,
   LedgerType,
@@ -12,12 +11,17 @@ import {
   Prisma,
   SelectionStatus,
 } from '@prisma/client';
+
+import { PrismaService } from '../../../prisma.service';
+import { FauxStakesLeaderboardService } from '../leaderboard/faux-stakes-leaderboard.service';
 import { WsGateway } from '../realtime/ws.gateway';
+import { CreateMarketDto } from './dto/create-market.dto';
 import { SettleMarketDto } from './dto/settle-market.dto';
-import { FauxStakesLeaderboardService } from '../../../games/faux-stakes/leaderboard/faux-stakes-leaderboard.service';
 
 @Injectable()
 export class MarketsService {
+  private readonly logger = new Logger(MarketsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaderboardService: FauxStakesLeaderboardService,
@@ -26,8 +30,12 @@ export class MarketsService {
 
   async createMarket(competitionId: string, dto: CreateMarketDto) {
     const competition = await this.prisma.competition.findUnique({
-      where: { id: competitionId },
-      select: { id: true },
+      where: {
+        id: competitionId,
+      },
+      select: {
+        id: true,
+      },
     });
 
     if (!competition) {
@@ -35,9 +43,10 @@ export class MarketsService {
     }
 
     const hasTeamSelections =
-      dto.teamSelections && dto.teamSelections.length > 0;
+      dto.teamSelections !== undefined && dto.teamSelections.length > 0;
+
     const hasLabelSelections =
-      dto.labelSelections && dto.labelSelections.length > 0;
+      dto.labelSelections !== undefined && dto.labelSelections.length > 0;
 
     if (!hasTeamSelections && !hasLabelSelections) {
       throw new BadRequestException(
@@ -53,91 +62,135 @@ export class MarketsService {
 
     const now = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      // If using teams, validate team ids belong to this game
-      if (hasTeamSelections) {
-        const teamIds = dto.teamSelections!.map((s) => s.teamId);
+    let market: Prisma.MarketGetPayload<{
+      include: {
+        selections: {
+          include: {
+            team: true;
+          };
+        };
+      };
+    }>;
 
-        const teams = await tx.team.findMany({
-          where: {
-            id: { in: teamIds },
-            competitionId,
-          },
-          select: { id: true },
-        });
-
-        if (teams.length !== teamIds.length) {
-          throw new BadRequestException(
-            'One or more teamIds are invalid for this game',
+    try {
+      market = await this.prisma.$transaction(async (tx) => {
+        if (hasTeamSelections) {
+          const teamIds = dto.teamSelections!.map(
+            (selection) => selection.teamId,
           );
-        }
 
-        const uniqueTeamIds = new Set(teamIds);
-        if (uniqueTeamIds.size !== teamIds.length) {
-          throw new BadRequestException(
-            'Duplicate teamIds are not allowed in a market',
-          );
-        }
-      }
-
-      if (hasLabelSelections) {
-        const labels = dto.labelSelections!.map((s) => s.label.trim());
-
-        const uniqueLabels = new Set(labels.map((l) => l.toLowerCase()));
-        if (uniqueLabels.size !== labels.length) {
-          throw new BadRequestException(
-            'Duplicate labels are not allowed in a market',
-          );
-        }
-      }
-
-      const market = await tx.market.create({
-        data: {
-          competitionId,
-          name: dto.name,
-          status: MarketStatus.OPEN,
-          selections: hasTeamSelections
-            ? {
-                create: dto.teamSelections!.map((selection) => ({
-                  teamId: selection.teamId,
-                  decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2.0),
-                })),
-              }
-            : {
-                create: dto.labelSelections!.map((selection) => ({
-                  label: selection.label.trim(),
-                  decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2.0),
-                })),
+          const teams = await tx.team.findMany({
+            where: {
+              id: {
+                in: teamIds,
               },
-        },
-        include: {
-          selections: {
-            include: {
-              team: true,
+              competitionId,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          if (teams.length !== teamIds.length) {
+            throw new BadRequestException(
+              'One or more teamIds are invalid for this competition',
+            );
+          }
+
+          const uniqueTeamIds = new Set(teamIds);
+
+          if (uniqueTeamIds.size !== teamIds.length) {
+            throw new BadRequestException(
+              'Duplicate teamIds are not allowed in a market',
+            );
+          }
+        }
+
+        if (hasLabelSelections) {
+          const labels = dto.labelSelections!.map((selection) =>
+            selection.label.trim(),
+          );
+
+          const uniqueLabels = new Set(
+            labels.map((label) => label.toLowerCase()),
+          );
+
+          if (uniqueLabels.size !== labels.length) {
+            throw new BadRequestException(
+              'Duplicate labels are not allowed in a market',
+            );
+          }
+        }
+
+        const createdMarket = await tx.market.create({
+          data: {
+            competitionId,
+            name: dto.name.trim(),
+            status: MarketStatus.DRAFT,
+
+            selections: hasTeamSelections
+              ? {
+                  create: dto.teamSelections!.map((selection) => ({
+                    teamId: selection.teamId,
+                    decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
+                  })),
+                }
+              : {
+                  create: dto.labelSelections!.map((selection) => ({
+                    label: selection.label.trim(),
+                    decimalOdds: new Prisma.Decimal(selection.decimalOdds ?? 2),
+                  })),
+                },
+          },
+
+          include: {
+            selections: {
+              include: {
+                team: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      await tx.competition.update({
-        where: { id: competitionId },
-        data: {
-          lastActivityAt: now,
-        },
-      });
+        await tx.competition.update({
+          where: {
+            id: competitionId,
+          },
+          data: {
+            lastActivityAt: now,
+          },
+        });
 
-      this.wsGateway.emitMarketCreated(competitionId, {
-        name: dto.name,
+        return createdMarket;
       });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'A market with this name already exists in this competition',
+        );
+      }
 
-      return market;
+      throw error;
+    }
+
+    this.wsGateway.emitMarketCreated(competitionId, {
+      name: market.name,
     });
+
+    return market;
   }
 
   async getMarkets(competitionId: string) {
     const competition = await this.prisma.competition.findUnique({
-      where: { id: competitionId },
-      select: { id: true },
+      where: {
+        id: competitionId,
+      },
+      select: {
+        id: true,
+      },
     });
 
     if (!competition) {
@@ -145,8 +198,14 @@ export class MarketsService {
     }
 
     return this.prisma.market.findMany({
-      where: { competitionId },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        competitionId,
+      },
+
+      orderBy: {
+        createdAt: 'asc',
+      },
+
       include: {
         selections: {
           include: {
@@ -155,6 +214,59 @@ export class MarketsService {
         },
       },
     });
+  }
+
+  async openMarket(competitionId: string, marketId: string) {
+    const market = await this.prisma.market.findFirst({
+      where: {
+        id: marketId,
+        competitionId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!market) {
+      throw new BadRequestException(
+        'Market does not exist for this competition',
+      );
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const result = await tx.market.updateMany({
+        where: {
+          id: marketId,
+          competitionId,
+          status: MarketStatus.DRAFT,
+        },
+
+        data: {
+          status: MarketStatus.OPEN,
+        },
+      });
+
+      if (result.count !== 1) {
+        throw new ForbiddenException('Only draft markets can be opened');
+      }
+
+      await tx.competition.update({
+        where: {
+          id: competitionId,
+        },
+        data: {
+          lastActivityAt: now,
+        },
+      });
+    });
+
+    return {
+      ok: true,
+      marketId,
+      status: MarketStatus.OPEN,
+    };
   }
 
   async closeMarket(competitionId: string, marketId: string) {
@@ -168,7 +280,6 @@ export class MarketsService {
       select: {
         id: true,
         name: true,
-        status: true,
       },
     });
 
@@ -178,23 +289,30 @@ export class MarketsService {
       );
     }
 
-    if (market.status === MarketStatus.SETTLED) {
-      throw new ForbiddenException('Settled markets cannot be closed');
-    }
-
-    if (market.status === MarketStatus.CLOSED) {
-      throw new ForbiddenException('Market is already closed');
-    }
-
     await this.prisma.$transaction(async (tx) => {
-      await tx.market.update({
-        where: { id: marketId },
-        data: { status: MarketStatus.CLOSED },
+      const result = await tx.market.updateMany({
+        where: {
+          id: marketId,
+          competitionId,
+          status: MarketStatus.OPEN,
+        },
+
+        data: {
+          status: MarketStatus.CLOSED,
+        },
       });
 
+      if (result.count !== 1) {
+        throw new ForbiddenException('Only open markets can be closed');
+      }
+
       await tx.competition.update({
-        where: { id: competitionId },
-        data: { lastActivityAt: now },
+        where: {
+          id: competitionId,
+        },
+        data: {
+          lastActivityAt: now,
+        },
       });
     });
 
@@ -219,14 +337,13 @@ export class MarketsService {
 
     const market = await this.prisma.market.findFirst({
       where: {
-        competitionId,
         id: marketId,
+        competitionId,
       },
+
       select: {
         id: true,
         name: true,
-        selections: true,
-        status: true,
       },
     });
 
@@ -236,99 +353,173 @@ export class MarketsService {
       );
     }
 
-    if (market.status !== MarketStatus.CLOSED) {
-      throw new ForbiddenException('Only closed markets can be settled');
-    }
-
-    const winningSelection = market.selections.find(
-      (selection) => selection.id === dto.winningSelectionId,
-    );
-
-    if (!winningSelection) {
-      throw new BadRequestException(
-        'Winning selection does not belong to this market',
-      );
-    }
-
-    const marketSelections = market.selections.map((selection) => selection.id);
-
-    const bets = await this.prisma.bet.findMany({
-      where: {
-        competitionId,
-        selectionId: {
-          in: marketSelections,
+    /*
+     * Everything above this boundary may fail normally.
+     *
+     * Everything inside this transaction is authoritative settlement
+     * state. If any part fails, PostgreSQL rolls the entire settlement
+     * back.
+     */
+    const settled = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.market.updateMany({
+        where: {
+          id: marketId,
+          competitionId,
+          status: MarketStatus.CLOSED,
         },
-        status: BetStatus.PENDING,
-      },
-    });
 
-    if (bets.length < 1) {
-      throw new BadRequestException('No bets made against this market');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const bet of bets) {
-        const hasWon = bet.selectionId === dto.winningSelectionId;
-
-        await tx.bet.update({
-          where: {
-            id: bet.id,
-          },
-          data: {
-            status: hasWon ? BetStatus.WON : BetStatus.LOST,
-            settledAt: now,
-          },
-        });
-
-        if (!hasWon) continue;
-
-        await tx.competitionLedgerTxn.create({
-          data: {
-            competitionId,
-            userId: bet.userId,
-            type: LedgerType.PAYOUT,
-            amount: bet.potentialReturn,
-            betId: bet.id,
-            marketId: marketId,
-          },
-        });
-      }
-
-      for (const selection of marketSelections) {
-        await tx.selection.update({
-          where: {
-            id: selection,
-          },
-          data: {
-            status:
-              selection === dto.winningSelectionId
-                ? SelectionStatus.WINNER
-                : SelectionStatus.LOSER,
-          },
-        });
-      }
-
-      await tx.market.update({
-        where: { id: marketId },
         data: {
           status: MarketStatus.SETTLED,
         },
       });
 
-      await tx.competition.update({
-        where: { id: competitionId },
-        data: { lastActivityAt: now },
+      if (claimed.count !== 1) {
+        throw new ForbiddenException('Only closed markets can be resolved');
+      }
+
+      const selections = await tx.selection.findMany({
+        where: {
+          marketId,
+        },
+
+        select: {
+          id: true,
+        },
       });
+
+      const winningSelection = selections.find(
+        (selection) => selection.id === dto.winningSelectionId,
+      );
+
+      if (!winningSelection) {
+        throw new BadRequestException(
+          'Winning selection does not belong to this market',
+        );
+      }
+
+      const selectionIds = selections.map((selection) => selection.id);
+
+      const bets = await tx.bet.findMany({
+        where: {
+          competitionId,
+
+          selectionId: {
+            in: selectionIds,
+          },
+
+          status: BetStatus.PENDING,
+        },
+      });
+
+      for (const bet of bets) {
+        const hasWon = bet.selectionId === dto.winningSelectionId;
+
+        const updatedBet = await tx.bet.updateMany({
+          where: {
+            id: bet.id,
+            status: BetStatus.PENDING,
+          },
+
+          data: {
+            status: hasWon ? BetStatus.WON : BetStatus.LOST,
+
+            settledAt: now,
+          },
+        });
+
+        if (updatedBet.count !== 1) {
+          throw new BadRequestException(
+            'A stake changed while this market was being resolved',
+          );
+        }
+
+        if (hasWon) {
+          await tx.competitionLedgerTxn.create({
+            data: {
+              competitionId,
+              userId: bet.userId,
+
+              type: LedgerType.PAYOUT,
+
+              amount: bet.potentialReturn,
+
+              betId: bet.id,
+              marketId,
+            },
+          });
+        }
+      }
+
+      await tx.selection.updateMany({
+        where: {
+          marketId,
+        },
+
+        data: {
+          status: SelectionStatus.LOSER,
+        },
+      });
+
+      await tx.selection.update({
+        where: {
+          id: dto.winningSelectionId,
+        },
+
+        data: {
+          status: SelectionStatus.WINNER,
+        },
+      });
+
+      await tx.competition.update({
+        where: {
+          id: competitionId,
+        },
+
+        data: {
+          lastActivityAt: now,
+        },
+      });
+
+      return {
+        id: market.id,
+        name: market.name,
+        status: MarketStatus.SETTLED,
+        winningSelectionId: dto.winningSelectionId,
+      };
     });
 
-    await this.leaderboardService.createSnapshot(competitionId, marketId);
+    /*
+     * IMPORTANT:
+     *
+     * From this point onward settlement has COMMITTED.
+     *
+     * Snapshot generation and realtime delivery are derived effects.
+     * They are not allowed to turn successful settlement into an HTTP
+     * failure.
+     */
 
-    this.wsGateway.emitMarketSettled(competitionId, {
-      id: marketId,
-      name: market.name,
-      winningSelectionId: dto.winningSelectionId,
-    });
+    try {
+      await this.leaderboardService.createSnapshot(competitionId, marketId);
+    } catch (error) {
+      this.logger.error(
+        `Settlement committed but leaderboard snapshot failed for market ${marketId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
-    return market;
+    try {
+      this.wsGateway.emitMarketSettled(competitionId, {
+        id: marketId,
+        name: market.name,
+        winningSelectionId: dto.winningSelectionId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Settlement committed but realtime notification failed for market ${marketId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+
+    return settled;
   }
 }

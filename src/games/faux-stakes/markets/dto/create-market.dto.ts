@@ -5,50 +5,70 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+const MIN_DECIMAL_ODDS = 1.01;
+const MAX_DECIMAL_ODDS = 1000;
 
 class TeamSelectionDto {
   @IsString()
+  @MinLength(1)
   teamId!: string;
 
   @IsOptional()
-  @IsNumber()
-  @Min(1.01)
+  @IsNumber({
+    maxDecimalPlaces: 3,
+  })
+  @Min(MIN_DECIMAL_ODDS)
+  @Max(MAX_DECIMAL_ODDS)
   decimalOdds?: number;
 }
 
 class LabelSelectionDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MinLength(1)
   @MaxLength(50)
   label!: string;
 
   @IsOptional()
-  @IsNumber()
-  @Min(1.01)
+  @IsNumber({
+    maxDecimalPlaces: 3,
+  })
+  @Min(MIN_DECIMAL_ODDS)
+  @Max(MAX_DECIMAL_ODDS)
   decimalOdds?: number;
 }
 
 export class CreateMarketDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   name!: string;
 
-  @ValidateIf((o: { labelSelections: LabelSelectionDto }) => !o.labelSelections)
+  @ValidateIf((value: CreateMarketDto) => !value.labelSelections)
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(2)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => TeamSelectionDto)
   teamSelections?: TeamSelectionDto[];
 
-  @ValidateIf((o: { teamSelections: TeamSelectionDto }) => !o.teamSelections)
+  @ValidateIf((value: CreateMarketDto) => !value.teamSelections)
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(2)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => LabelSelectionDto)
